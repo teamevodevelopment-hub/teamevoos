@@ -79,6 +79,23 @@ export interface Notification {
   deals: { first_name: string; last_name: string } | null;
 }
 
+export interface TeamMessage {
+  id: number;
+  author_id: string | null;
+  kind: "user" | "celebration";
+  body: string;
+  deal_id: number | null;
+  reply_to: number | null;
+  deleted_at: string | null;
+  created_at: string;
+}
+
+export interface TeamReaction {
+  message_id: number;
+  user_id: string;
+  emoji: string;
+}
+
 export interface NamedRow {
   id: number;
   name: string;

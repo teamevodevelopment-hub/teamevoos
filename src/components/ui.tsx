@@ -43,6 +43,30 @@ export const I: Record<string, ReactNode> = {
       <path d="M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-8l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />
     </svg>
   ),
+  team: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M4 5h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-3.5 2.5V14H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />
+      <path d="M16 9h4a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-1v2.5L15.5 17H11a1 1 0 0 1-1-1v-2" />
+    </svg>
+  ),
+  smile: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.5 14c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2" />
+      <path d="M9 9.5h.01M15 9.5h.01" strokeWidth={2.6} />
+    </svg>
+  ),
+  reply: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M10 8L5 12.5 10 17" />
+      <path d="M5.5 12.5H14a5 5 0 0 1 5 5V19" />
+    </svg>
+  ),
+  trash: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" />
+    </svg>
+  ),
   bank: (
     <svg viewBox="0 0 24 24" {...s}>
       <path d="M3 10l9-5 9 5M5 10v8M19 10v8M9.5 10v8M14.5 10v8M3 20h18" />

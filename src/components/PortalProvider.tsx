@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase, errText } from "@/lib/supabase/client";
 import { STAGE, targets, FINAL } from "@/lib/stages";
-import type { Deal, NamedRow, Notification, Profile, StageId } from "@/lib/types";
+import type { Deal, NamedRow, Notification, Profile, StageId, TeamMessage } from "@/lib/types";
 
 export type Dialog =
   | { kind: "lost"; deal: Deal }
@@ -43,6 +43,10 @@ interface Portal {
   setDialog: (d: Dialog) => void;
   toasts: Toast[];
   unread: number;
+  teamUnread: number;
+  markTeamSeen: (lastId: number) => void;
+  confetti: number;
+  celebrate: () => void;
   signOut: () => Promise<void>;
 }
 
@@ -84,6 +88,20 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const toastId = useRef(0);
   const profilesRef = useRef<Profile[]>([]);
   profilesRef.current = profiles;
+  const pathRef = useRef(pathname);
+  pathRef.current = pathname;
+  const [teamUnread, setTeamUnread] = useState(0);
+  const [confetti, setConfetti] = useState(0);
+  const celebrate = useCallback(() => setConfetti((n) => n + 1), []);
+
+  // The team room remembers the last message each person has seen (on this device).
+  const markTeamSeen = useCallback((lastId: number) => {
+    try {
+      const prev = Number(localStorage.getItem("teamSeen") || 0);
+      if (lastId > prev) localStorage.setItem("teamSeen", String(lastId));
+    } catch {}
+    setTeamUnread(0);
+  }, []);
 
   const toast = useCallback((msg: string, kind: Toast["kind"] = "") => {
     const id = ++toastId.current;
@@ -144,6 +162,25 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     refreshDeals();
     refreshNotifications();
     refreshSettings();
+    (async () => {
+      let seen = 0;
+      try {
+        seen = Number(localStorage.getItem("teamSeen") || 0);
+      } catch {}
+      const sb = supabase();
+      if (!seen) {
+        // First visit on this device: start fresh rather than flag the whole history as unread.
+        const { data } = await sb.from("team_messages").select("id").order("id", { ascending: false }).limit(1);
+        if (data?.[0]) markTeamSeen(data[0].id as number);
+        return;
+      }
+      const { count } = await sb
+        .from("team_messages")
+        .select("id", { count: "exact", head: true })
+        .gt("id", seen)
+        .neq("author_id", me.id);
+      setTeamUnread(count ?? 0);
+    })();
     let t: ReturnType<typeof setTimeout> | undefined;
     const soon = () => {
       clearTimeout(t);
@@ -153,6 +190,18 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       .channel("portal")
       .on("postgres_changes", { event: "*", schema: "public", table: "deals" }, soon)
       .on("postgres_changes", { event: "*", schema: "public", table: "lender_submissions" }, soon)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, (x) => {
+        const m = x.new as TeamMessage;
+        const onTeam = pathRef.current === "/team";
+        if (m.kind === "celebration") {
+          celebrate();
+          if (!onTeam) {
+            const who = profilesRef.current.find((p) => p.id === m.author_id)?.name ?? "Someone";
+            toast(m.body === "closed" ? `🎉 ${who} just closed a deal!` : `✅ ${who}’s deal got approved!`, "ok");
+          }
+        }
+        if (!onTeam && m.author_id !== me.id) setTeamUnread((n) => n + 1);
+      })
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${me.id}` }, (p) => {
         refreshNotifications();
         if (p.eventType === "INSERT") {
@@ -174,7 +223,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("focus", onFocus);
       supabase().removeChannel(ch);
     };
-  }, [me, refreshDeals, refreshNotifications, refreshSettings, toast]);
+  }, [me, refreshDeals, refreshNotifications, refreshSettings, toast, celebrate, markTeamSeen]);
 
   const person = useCallback((id: string | null | undefined) => profiles.find((p) => p.id === id), [profiles]);
 
@@ -271,6 +320,10 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     setDialog,
     toasts,
     unread,
+    teamUnread,
+    markTeamSeen,
+    confetti,
+    celebrate,
     signOut,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

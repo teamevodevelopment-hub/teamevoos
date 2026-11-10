@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/20261110000000_init.sql", import.meta.url), "utf8");
-const laterMigrations = ["20261110000001_remove_2fa.sql"].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
+const laterMigrations = ["20261110000001_remove_2fa.sql", "20261110000002_team_chat.sql"].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
 const db = new PGlite();
 
 await db.exec(`
@@ -220,6 +220,54 @@ await ok("Ahmed can't see Corbin's licence files", async () =>
 await ok("Licence files can't be deleted (delete removes nothing)", async () => {
   await as("Corbin", "delete from storage.objects");
   eq((await db.query("select count(*)::int n from storage.objects")).rows[0].n, 1, "files left");
+});
+
+console.log("\nTeam chat");
+const teamMentions = async (who) =>
+  (await db.query("select count(*)::int n from public.notifications where user_id=$1 and deal_id is null and kind='mention'", [U[who]])).rows[0].n;
+let tm;
+await ok("Everyone can post and read the team room", async () => {
+  tm = (await as("Ahmed", "insert into public.team_messages (body) values ('morning all ☕') returning id")).rows[0].id;
+  eq((await as("Corbin", "select count(*)::int n from public.team_messages where id=$1", [tm])).rows[0].n, 1, "Corbin sees it");
+});
+await denied("Can't post as someone else", () => as("Corbin", "insert into public.team_messages (body, author_id) values ('hi', $1)", [U.TJ]));
+await denied("Can't fake a celebration", () => as("Corbin", "insert into public.team_messages (body, kind) values ('closed', 'celebration')"));
+await denied("Can't edit someone's message directly", () => as("Corbin", "update public.team_messages set body='x' where id=$1 returning id", [tm]).then((r) => { if (!r.rows.length) throw new Error("no rows changed"); }));
+await ok("@Sam in team chat notifies Sam", async () => {
+  const before = await teamMentions("Sam");
+  await as("Corbin", "insert into public.team_messages (body) values ('@Sam lunch?')");
+  eq(await teamMentions("Sam"), before + 1, "Sam mentions");
+});
+await ok("@team notifies everyone except the sender", async () => {
+  const before = await Promise.all(["TJ", "Sam", "Ahmed", "Corbin"].map(teamMentions));
+  await as("Corbin", "insert into public.team_messages (body) values ('big day @team 🔥')");
+  const after = await Promise.all(["TJ", "Sam", "Ahmed", "Corbin"].map(teamMentions));
+  eq(after.map((n, i) => n - before[i]), [1, 1, 1, 0], "new mentions");
+});
+await ok("Reactions: add your own, remove your own", async () => {
+  await as("Sam", "insert into public.team_reactions (message_id, emoji) values ($1, '🔥')", [tm]);
+  await as("Sam", "delete from public.team_reactions where message_id=$1 and emoji='🔥'", [tm]);
+});
+await denied("Can't react as someone else", () => as("Sam", "insert into public.team_reactions (message_id, emoji, user_id) values ($1, '👍', $2)", [tm, U.TJ]));
+await denied("Can't delete someone else's message", () => as("Corbin", "select public.delete_team_message($1)", [tm]), "only delete your own");
+await ok("Author deletes own message; text is wiped", async () => {
+  await as("Ahmed", "select public.delete_team_message($1)", [tm]);
+  const r = (await db.query("select body, deleted_at from public.team_messages where id=$1", [tm])).rows[0];
+  if (r.body !== "·" || !r.deleted_at) throw new Error("not wiped");
+});
+await ok("Closing a deal posts a celebration that names the agent, not the customer", async () => {
+  const d = await newDeal("Ahmed");
+  await as("Ahmed", "select public.move_deal($1,'docs')", [d]);
+  await as("Ahmed", "select public.move_deal($1,'ready')", [d]);
+  await as("TJ", "select public.add_lenders($1, array['RBC'])", [d]);
+  const sub = (await db.query("select id from public.lender_submissions where deal_id=$1", [d])).rows[0].id;
+  await as("TJ", "select public.set_lender_status($1,'approved')", [sub]);
+  await as("Sam", "select public.move_deal($1,'car')", [d]);
+  await as("Sam", "select public.move_deal($1,'closed')", [d]);
+  const rows = (await as("Corbin", "select author_id, body from public.team_messages where kind='celebration' and deal_id=$1 order by id", [d])).rows;
+  eq(rows.map((r) => r.body), ["approved", "closed"], "celebrations");
+  if (rows.some((r) => r.author_id !== U.Ahmed || /Test|Customer/.test(r.body))) throw new Error("leaked customer or wrong agent");
+  eq((await as("Corbin", "select count(*)::int n from public.deals where id=$1", [d])).rows[0].n, 0, "Corbin still can't open the deal");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

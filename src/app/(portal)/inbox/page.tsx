@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { usePortal } from "@/components/PortalProvider";
 import { Avatar, Mentionized } from "@/components/ui";
 import { supabase } from "@/lib/supabase/client";
@@ -7,7 +8,8 @@ import { when } from "@/lib/stages";
 
 export default function InboxPage() {
   const { notifications, person, profiles, openDeal, refreshNotifications } = usePortal();
-  const names = profiles.map((p) => p.name);
+  const router = useRouter();
+  const names = [...profiles.map((p) => p.name), "team", "everyone"];
 
   if (!notifications.length)
     return (
@@ -41,19 +43,22 @@ export default function InboxPage() {
                 await supabase().from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
                 refreshNotifications();
               }
-              if (n.deal_id && n.deals) openDeal(n.deal_id);
+              if (!n.deal_id) router.push("/team");
+              else if (n.deals) openDeal(n.deal_id);
             }}
           >
             <Avatar p={person(n.actor_id)} size="lg" />
             <div className="t">
               <div className="l1">
                 <b>{person(n.actor_id)?.name ?? "Someone"}</b>
-                <span>{n.kind === "mention" ? "mentioned you on" : "updated"}</span>
-                <span className="deal">{n.deals ? `${n.deals.first_name} ${n.deals.last_name}` : "a deal you can no longer see"}</span>
+                <span>{n.kind === "mention" ? (n.deal_id ? "mentioned you on" : "mentioned you in") : "updated"}</span>
+                <span className="deal">
+                  {!n.deal_id ? "Team chat" : n.deals ? `${n.deals.first_name} ${n.deals.last_name}` : "a deal you can no longer see"}
+                </span>
                 <span className="when">{when(n.created_at)}</span>
               </div>
               <div className="q">
-                <Mentionized text={n.body} names={names} />
+                <Mentionized text={n.body.replace(/#\[deal:\d+\]/g, "a deal")} names={names} />
               </div>
             </div>
           </button>

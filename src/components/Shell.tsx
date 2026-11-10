@@ -8,6 +8,7 @@ import { Avatar, I } from "./ui";
 import { ROLE_TITLE } from "@/lib/stages";
 import { DealPanel } from "./DealPanel";
 import { Dialogs } from "./Dialogs";
+import { Confetti } from "./Confetti";
 
 export function useIsMobile() {
   const [m, setM] = useState(false);
@@ -21,19 +22,20 @@ export function useIsMobile() {
   return m;
 }
 
-const TITLES: Record<string, string> = { "/deals": "Deals", "/inbox": "Inbox", "/new": "New deal", "/settings": "Settings" };
+const TITLES: Record<string, string> = { "/deals": "Deals", "/team": "Team chat", "/inbox": "Inbox", "/new": "New deal", "/settings": "Settings" };
 // Non-admins reach /settings only for their account (sign out), so it gets a plainer name.
 const titleFor = (path: string, admin: boolean) => (path === "/settings" && !admin ? "Account" : (TITLES[path] ?? "Deal Portal"));
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const p = usePortal();
-  const { me, deals, unread, layout, setLayout, setDialog, dialog, toasts, closeDeal } = p;
+  const { me, deals, unread, teamUnread, confetti, layout, setLayout, setDialog, dialog, toasts, closeDeal } = p;
   const pathname = usePathname();
   const params = useSearchParams();
   const openId = Number(params.get("deal")) || null;
 
   const nav = [
     { href: "/deals", label: "Deals", icon: I.board },
+    { href: "/team", label: "Team chat", short: "Team", icon: I.team, count: pathname === "/team" ? 0 : teamUnread },
     { href: "/inbox", label: "Inbox", icon: I.inbox, count: unread },
     { href: "/new", label: "New deal", icon: I.plus },
     ...(me.role === "admin" ? [{ href: "/settings", label: "Settings", icon: I.gear }] : []),
@@ -59,7 +61,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
       ? me.role === "agent"
         ? `Your ${active} active deal${active === 1 ? "" : "s"}`
         : `${active} active deal${active === 1 ? "" : "s"} across the team`
-      : pathname === "/inbox"
+      : pathname === "/team"
+        ? "Everyone on the team · type @team to ping all"
+        : pathname === "/inbox"
         ? `${unread} unread`
         : pathname === "/new"
           ? "Takes about a minute"
@@ -144,7 +148,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ) : (
               <Link key={n.href} href={n.href} className="tab" aria-current={pathname === n.href ? "page" : undefined}>
                 {n.icon}
-                {n.label}
+                {"short" in n && n.short ? n.short : n.label}
                 {n.count ? <span className="count">{n.count}</span> : null}
               </Link>
             ),
@@ -154,6 +158,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className={`scrim${openId ? " on" : ""}`} onClick={closeDeal} />
       <DealPanel id={openId} />
       <Dialogs />
+      <Confetti fire={confetti} />
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
