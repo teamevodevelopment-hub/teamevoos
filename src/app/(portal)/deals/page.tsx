@@ -37,6 +37,18 @@ function subline(d: Deal) {
   }
 }
 
+/** Days in the current stage. Late deals get a warning icon and the word "late", not just a colour. */
+function InStage({ days, late, short }: { days: number; late: boolean; short?: boolean }) {
+  const text = days === 0 ? "Today" : short ? `${days}d` : `${days} day${days === 1 ? "" : "s"}`;
+  return (
+    <span className={late ? "late" : ""} title={late ? `${days} days in this stage, needs attention` : undefined}>
+      {late ? I.alert : I.clock}
+      {text}
+      {late && (short ? <span className="sr-only"> in stage, late</span> : " · late")}
+    </span>
+  );
+}
+
 function Card({ d, draggable }: { d: Deal; draggable: boolean }) {
   const { person, openDeal, notifications, flash } = usePortal();
   const days = daysSince(d.stage_changed_at);
@@ -54,20 +66,27 @@ function Card({ d, draggable }: { d: Deal; draggable: boolean }) {
         (e.currentTarget as HTMLElement).classList.add("dragging");
       }}
       onDragEnd={(e) => (e.currentTarget as HTMLElement).classList.remove("dragging")}
+      role="button"
       onClick={() => openDeal(d.id)}
-      onKeyDown={(e) => e.key === "Enter" && openDeal(d.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openDeal(d.id);
+        }
+      }}
     >
       <div className="card-t">
         {fullName(d)}
-        {unread && <span className="dot" title="Unread" />}
+        {unread && (
+          <span className="dot" title="Unread messages">
+            <span className="sr-only">Unread messages</span>
+          </span>
+        )}
       </div>
       <div className="card-s">{subline(d)}</div>
       <div className="card-m">
         <Avatar p={person(d.agent_id)} size="sm" />
-        <span className={late ? "late" : ""}>
-          {I.clock}
-          {days === 0 ? "Today" : `${days}d`}
-        </span>
+        <InStage days={days} late={late} short />
         {d.lender_submissions.length > 0 && (
           <span>
             {I.bank}
@@ -169,10 +188,19 @@ export default function DealsPage() {
           <tbody>
             {rows.map((d) => {
               const days = daysSince(d.stage_changed_at);
+              const late = days >= 3 && !FINAL.includes(d.stage);
               return (
                 <tr key={d.id} onClick={() => openDeal(d.id)}>
                   <td>
-                    <b>{fullName(d)}</b>
+                    <button
+                      className="rowlink"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDeal(d.id);
+                      }}
+                    >
+                      {fullName(d)}
+                    </button>
                     <div style={{ color: "var(--fg-3)", fontSize: 12.5 }}>{d.city}</div>
                   </td>
                   <td>
@@ -195,7 +223,9 @@ export default function DealsPage() {
                       <span style={{ color: "var(--fg-3)" }}>—</span>
                     )}
                   </td>
-                  <td className="tnum">{days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"}`}</td>
+                  <td className="tnum instage">
+                    <InStage days={days} late={late} />
+                  </td>
                   <td className="mono">{d.dealertrack_no || <span style={{ color: "var(--fg-3)" }}>—</span>}</td>
                 </tr>
               );

@@ -6,16 +6,24 @@ import { usePortal } from "./PortalProvider";
 import { Avatar, Chip, I } from "./ui";
 import { supabase, errText } from "@/lib/supabase/client";
 import { fullName } from "@/lib/stages";
+import { useFocusTrap } from "@/lib/useFocusTrap";
 import type { Deal } from "@/lib/types";
 
 export function Dialogs() {
+  const { dialog } = usePortal();
+  return dialog ? <Overlay /> : null;
+}
+
+function Overlay() {
   const { dialog, setDialog } = usePortal();
+  const ref = useRef<HTMLDivElement>(null);
+  useFocusTrap(ref, true);
   if (!dialog) return null;
   const close = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) setDialog(null);
   };
   return (
-    <div className="overlay" onClick={close}>
+    <div className="overlay" ref={ref} onClick={close}>
       {dialog.kind === "lost" && <LostDialog deal={dialog.deal} />}
       {dialog.kind === "lenders" && <LendersDialog deal={dialog.deal} />}
       {dialog.kind === "idea" && <IdeaDialog />}
@@ -33,6 +41,7 @@ function LostDialog({ deal }: { deal: Deal }) {
     <form
       className="dlg"
       role="dialog"
+      aria-modal="true"
       aria-label="Mark lost"
       onSubmit={async (e) => {
         e.preventDefault();
@@ -74,6 +83,7 @@ function LendersDialog({ deal }: { deal: Deal }) {
     <form
       className="dlg"
       role="dialog"
+      aria-modal="true"
       aria-label="Submit to lenders"
       onSubmit={async (e) => {
         e.preventDefault();
@@ -117,6 +127,7 @@ function IdeaDialog() {
     <form
       className="dlg"
       role="dialog"
+      aria-modal="true"
       aria-label="Suggest a feature"
       onSubmit={async (e) => {
         e.preventDefault();
@@ -187,7 +198,8 @@ function Palette() {
   };
 
   return (
-    <div className="pal" role="dialog" aria-label="Search">
+    <div className="pal" role="dialog"
+      aria-modal="true" aria-label="Search">
       <div className="in">
         {I.search}
         <input

@@ -5,14 +5,25 @@ import { usePortal } from "./PortalProvider";
 import { Avatar, Chip, I, Mentionized } from "./ui";
 import { useIsMobile } from "./Shell";
 import { supabase, errText } from "@/lib/supabase/client";
+import { useFocusTrap } from "@/lib/useFocusTrap";
 import { STAGE, canSee, daysSince, fullName, targets, waitingText, when } from "@/lib/stages";
 import type { Deal, DealEvent, Message, Profile } from "@/lib/types";
 
 export function DealPanel({ id }: { id: number | null }) {
   const { deals, dealsLoaded, closeDeal } = usePortal();
   const deal = id ? deals.find((d) => d.id === id) : undefined;
+  const ref = useRef<HTMLElement>(null);
+  useFocusTrap(ref, !!id);
   return (
-    <aside className={`panel${id ? " on" : ""}`} aria-label="Deal" aria-hidden={!id}>
+    <aside
+      ref={ref}
+      className={`panel${id ? " on" : ""}`}
+      role="dialog"
+      aria-modal={id ? true : undefined}
+      aria-label={deal ? fullName(deal) : "Deal"}
+      aria-hidden={!id}
+      tabIndex={-1}
+    >
       {id && deal && <DealView key={deal.id} d={deal} />}
       {id && !deal && (
         <div className="p-head">

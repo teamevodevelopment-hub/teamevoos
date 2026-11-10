@@ -105,6 +105,12 @@ export const I: Record<string, ReactNode> = {
       <path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" />
     </svg>
   ),
+  alert: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M12 4l9 16H3z" />
+      <path d="M12 10v4M12 17h.01" strokeWidth={2.2} />
+    </svg>
+  ),
   hourglass: (
     <svg viewBox="0 0 24 24" {...s}>
       <path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9" />
