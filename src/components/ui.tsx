@@ -116,10 +116,23 @@ export const I: Record<string, ReactNode> = {
       <path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9" />
     </svg>
   ),
+  /** Steering wheel: the brand mark. */
   logo: (
-    <svg viewBox="0 0 24 24" {...s} strokeWidth={2.2}>
-      <path d="M4 16l5-5 4 4 7-8" />
-      <path d="M15 7h5v5" />
+    <svg viewBox="0 0 24 24" {...s} strokeWidth={2.1}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12.6" r="2.3" />
+      <path d="M3.6 11.2c2.6-.9 5.4-1.3 8.4-1.3s5.8.4 8.4 1.3M9.9 13.6L7.4 19.2M14.1 13.6l2.5 5.6" />
+    </svg>
+  ),
+  trophy: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M8 4h8v5a4 4 0 0 1-8 0z" />
+      <path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4" />
+    </svg>
+  ),
+  crown: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M4 8l4 4 4-6 4 6 4-4-1.5 10h-13z" />
     </svg>
   ),
 };

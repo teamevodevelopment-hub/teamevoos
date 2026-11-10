@@ -20,7 +20,7 @@ export function Confetti({ fire }: { fire: number }) {
     ctx.scale(dpr, dpr);
 
     const css = getComputedStyle(document.documentElement);
-    const colors = ["--accent", "--s-appr", "--s-ready", "--s-sub", "--s-closed", "--s-docs"].map((v) => css.getPropertyValue(v).trim() || "#3345D1");
+    const colors = ["--brand", "--s-appr", "--s-ready", "--s-car", "--s-closed", "--s-docs"].map((v) => css.getPropertyValue(v).trim() || "#DC2626");
     const parts = Array.from({ length: 160 }, (_, i) => {
       const fromLeft = i % 2 === 0;
       return {

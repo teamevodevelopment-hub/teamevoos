@@ -265,7 +265,9 @@ export default function TeamPage() {
           </div>
         </div>
         <div className="scard">
-          <h3>Closed this month 🏆</h3>
+          <h3 className="ic-h">
+            {I.trophy}Closed this month
+          </h3>
           {Object.keys(wins).length === 0 ? (
             <p>No closed deals yet this month. The first one gets confetti.</p>
           ) : (
@@ -277,7 +279,11 @@ export default function TeamPage() {
                     <span className="who">
                       <Avatar p={person(id)} size="sm" />
                       {person(id)?.name}
-                      {i === 0 && " 👑"}
+                      {i === 0 && (
+                        <span className="crown" title="Top closer this month">
+                          {I.crown}
+                        </span>
+                      )}
                     </span>
                     <span className="bar">
                       <span style={{ width: `${(n / maxWins) * 100}%` }} />
@@ -312,7 +318,9 @@ function Celebration({ m, agent, deals }: { m: TeamMessage; agent?: Profile; dea
 function DealChip({ id, deals }: { id: number; deals: Deal[] }) {
   const { openDeal } = usePortal();
   const d = deals.find((x) => x.id === id);
-  if (!d) return <span className="dealchip locked">🔒 Private deal</span>;
+  if (!d) return <span className="dealchip locked">
+        {I.lock}Private deal
+      </span>;
   return (
     <button
       className="dealchip"
