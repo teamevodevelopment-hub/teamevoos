@@ -13,7 +13,11 @@ function subline(d: Deal) {
     case "new":
       return d.phone || "No phone yet";
     case "docs":
-      return d.licence_front && d.licence_back ? "Licence front and back in" : d.licence_front ? "Waiting on licence back" : "Waiting on licence";
+      return d.licence_front && d.licence_back
+        ? "Licence front and back in"
+        : d.licence_front || d.licence_back
+          ? `Licence ${d.licence_front ? "front" : "back"} in`
+          : d.phone || "No licence photos";
     case "ready":
       return d.dealertrack_no ? <span className="mono">{d.dealertrack_no}</span> : "Dealertrack # missing";
     case "submitted":

@@ -142,7 +142,9 @@ export default function NewDealPage() {
         </div>
       </div>
       <div className="field">
-        <span className="flabel">Driver’s licence</span>
+        <span className="flabel">
+          Driver’s licence <span style={{ fontWeight: 400, color: "var(--fg-3)" }}>(optional, front and back)</span>
+        </span>
         <div className="drops">
           {slot("front")}
           {slot("back")}

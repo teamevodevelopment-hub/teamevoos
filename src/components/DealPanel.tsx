@@ -194,7 +194,9 @@ function DealView({ d }: { d: Deal }) {
           </div>
 
           <div className="sec">
-            <h4>Driver’s licence</h4>
+            <h4>
+              Driver’s licence<span className="r">Optional</span>
+            </h4>
             <div className="lic">
               <LicenceSlot d={d} side="front" canUpload={editable} />
               <LicenceSlot d={d} side="back" canUpload={editable} />
