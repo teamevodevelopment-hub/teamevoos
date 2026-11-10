@@ -77,13 +77,41 @@ export interface Deal {
   deal_conditions: Condition[];
 }
 
-export interface Message {
+export type FileKind = "image" | "file" | "voice";
+
+/** Optional attachment on any chat message. */
+export interface FileFields {
+  file_path?: string | null;
+  file_kind?: FileKind | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  file_ms?: number | null;
+}
+
+export interface Message extends FileFields {
   id: number;
   deal_id: number;
   author_id: string | null;
   kind: "user" | "system";
   body: string;
   created_at: string;
+}
+
+export interface DirectMessage extends FileFields {
+  id: number;
+  sender_id: string;
+  recipient_id: string;
+  body: string;
+  reply_to: number | null;
+  deleted_at: string | null;
+  created_at: string;
+}
+
+/** When someone last read a chat: "team", "deal:<id>" or "dm:<other person's id>". */
+export interface ChatRead {
+  user_id: string;
+  chat: string;
+  last_read_at: string;
 }
 
 export interface DealEvent {
@@ -106,7 +134,7 @@ export interface Notification {
   deals: { first_name: string; last_name: string } | null;
 }
 
-export interface TeamMessage {
+export interface TeamMessage extends FileFields {
   id: number;
   author_id: string | null;
   kind: "user" | "celebration";

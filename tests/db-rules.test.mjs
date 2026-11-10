@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/20261110000000_init.sql", import.meta.url), "utf8");
-const laterMigrations = ["20261110000001_remove_2fa.sql", "20261110000002_team_chat.sql", "20261110000003_auto_finance.sql"].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
+const laterMigrations = ["20261110000001_remove_2fa.sql", "20261110000002_team_chat.sql", "20261110000003_auto_finance.sql", "20261110000004_chat_and_push.sql"].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
 const db = new PGlite();
 
 await db.exec(`
@@ -18,9 +18,14 @@ await db.exec(`
   create table storage.objects (id bigserial primary key, bucket_id text, name text);
   alter table storage.objects enable row level security;
   create publication supabase_realtime;
+  -- Stand-in for pg_net: records each push instead of sending it.
+  create schema extensions; create schema net;
+  create table net.calls (id serial primary key, url text, body jsonb, headers jsonb);
+  create function net.http_post(url text, body jsonb, headers jsonb) returns bigint language sql as
+    $$ insert into net.calls (url, body, headers) values (url, body, headers) returning id::bigint $$;
 `);
 await db.exec(migration);
-for (const m of laterMigrations) await db.exec(m);
+for (const m of laterMigrations) await db.exec(m.replace(/create extension if not exists pg_net[^;]*;/, ""));
 await db.exec(`
   grant usage on schema public, auth, storage to authenticated;
   grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -307,6 +312,111 @@ await denied("Agent can't remove a ticked condition", () =>
 await ok("Sam can remove any condition", async () => {
   const r = await as("Sam", "delete from public.deal_conditions where id=$1 returning id", [cond]);
   eq(r.rows.length, 1, "removed");
+});
+
+console.log("\nPrivate chats, files and read receipts");
+let dm;
+const pair = (a, b) => [U[a], U[b]].sort().join("_");
+await ok("Corbin sends Ahmed a private message", async () => {
+  dm = (await as("Corbin", "insert into public.direct_messages (recipient_id, body) values ($1, 'you around?') returning id", [U.Ahmed])).rows[0].id;
+  eq((await as("Ahmed", "select count(*)::int n from public.direct_messages where id=$1", [dm])).rows[0].n, 1, "Ahmed sees it");
+});
+await ok("Nobody else can read a private chat, TJ included", async () => {
+  eq((await as("Sam", "select count(*)::int n from public.direct_messages")).rows[0].n, 0, "Sam");
+  eq((await as("TJ", "select count(*)::int n from public.direct_messages")).rows[0].n, 0, "TJ");
+});
+await denied("Can't send a private message as someone else", () =>
+  as("Corbin", "insert into public.direct_messages (sender_id, recipient_id, body) values ($1, $2, 'hi')", [U.TJ, U.Ahmed]));
+await denied("Can't message yourself", () => as("Corbin", "insert into public.direct_messages (recipient_id, body) values ($1, 'hi')", [U.Corbin]));
+await denied("A message needs text or a file", () => as("Corbin", "insert into public.direct_messages (recipient_id, body) values ($1, '')", [U.Ahmed]));
+await ok("A photo can be sent on its own, inside the pair's folder", () =>
+  as("Corbin", "insert into public.direct_messages (recipient_id, file_path, file_kind) values ($1, $2, 'image')", [U.Ahmed, `dm/${pair("Corbin", "Ahmed")}/a.jpg`]));
+await denied("A private message can't point at another chat's file", () =>
+  as("Corbin", "insert into public.direct_messages (recipient_id, file_path, file_kind) values ($1, 'team/x.jpg', 'image')", [U.Ahmed]));
+await ok("Only the pair can open their chat files", async () => {
+  await as("Corbin", "insert into storage.objects (bucket_id, name) values ('chat-files', $1)", [`dm/${pair("Corbin", "Ahmed")}/a.jpg`]);
+  eq((await as("Ahmed", "select count(*)::int n from storage.objects where bucket_id='chat-files'")).rows[0].n, 1, "Ahmed");
+  eq((await as("Sam", "select count(*)::int n from storage.objects where bucket_id='chat-files'")).rows[0].n, 0, "Sam");
+});
+await denied("Can't upload into someone else's private chat folder", () =>
+  as("Sam", "insert into storage.objects (bucket_id, name) values ('chat-files', $1)", [`dm/${pair("Corbin", "Ahmed")}/b.jpg`]));
+let cd;
+await ok("Voice notes and files work in deal chats", async () => {
+  cd = await newDeal("Corbin");
+  await as("Corbin", "insert into public.messages (deal_id, file_path, file_kind, file_ms) values ($1, $2, 'voice', 12000)", [cd, `deal/${cd}/v.m4a`]);
+});
+await denied("Ahmed can't upload files into Corbin's deal", () =>
+  as("Ahmed", "insert into storage.objects (bucket_id, name) values ('chat-files', $1)", [`deal/${cd}/x.jpg`]));
+await ok("Photos work in the team room", () => as("Ahmed", "insert into public.team_messages (file_path, file_kind) values ('team/p.jpg', 'image')"));
+await ok("Unread counts: Ahmed has Corbin's private messages waiting", async () => {
+  const u = (await as("Ahmed", "select public.my_unread() u")).rows[0].u;
+  eq(u.chats[`dm:${U.Corbin}`], 2, "unread");
+});
+await ok("Reading the chat clears it, and Corbin sees it was read", async () => {
+  await as("Ahmed", "select public.mark_read($1)", [`dm:${U.Corbin}`]);
+  const u = (await as("Ahmed", "select public.my_unread() u")).rows[0].u;
+  eq(u.chats[`dm:${U.Corbin}`], undefined, "cleared");
+  eq((await as("Corbin", "select count(*)::int n from public.chat_reads where user_id=$1 and chat=$2", [U.Ahmed, `dm:${U.Corbin}`])).rows[0].n, 1, "receipt");
+});
+await ok("Read receipts in private chats stay private", async () =>
+  eq((await as("Sam", "select count(*)::int n from public.chat_reads where chat like 'dm:%'")).rows[0].n, 0, "Sam sees none"));
+await denied("Can't mark a deal read that you can't see", () => as("Ahmed", "select public.mark_read($1)", [`deal:${cd}`]), "Deal not found");
+await denied("The app can't read the push settings", () => as("Corbin", "select * from private.push_config"));
+
+console.log("\nPush notifications");
+await db.query("insert into private.push_config (url, secret) values ('https://example.test/api/push', $1)", ["s".repeat(40)]);
+for (const n of ["TJ", "Sam", "Corbin", "Ahmed"])
+  await as(n, "select public.save_push_subscription($1, 'key', 'auth', 'iPhone')", [`https://push.example/${n}`]);
+const lastPush = async () => (await db.query("select body from net.calls order by id desc limit 1")).rows[0]?.body;
+const pushedTo = async () => ((await lastPush())?.subs ?? []).map((x) => x.endpoint.split("/").pop()).sort();
+const calls = async () => (await db.query("select count(*)::int n from net.calls")).rows[0].n;
+await ok("People only see their own phones", async () => eq((await as("Corbin", "select count(*)::int n from public.push_subscriptions")).rows[0].n, 1, "count"));
+await ok("A deal chat message pings everyone who can see the deal, not the sender", async () => {
+  await as("Corbin", "insert into public.messages (deal_id, body) values ($1, 'licence is in')", [cd]);
+  eq(await pushedTo(), ["Sam", "TJ"], "recipients");
+  const b = await lastPush();
+  if (!b.title.includes("Corbin") || b.url !== `/deals?deal=${cd}&tab=chat`) throw new Error(JSON.stringify(b));
+});
+await ok("A private message pings only the other person, with a badge count", async () => {
+  // Start Ahmed from a clean slate: team room read, deal updates read.
+  await as("Ahmed", "select public.mark_read('team')");
+  await as("Ahmed", "update public.notifications set read_at=now() where read_at is null");
+  await as("Corbin", "insert into public.direct_messages (recipient_id, body) values ($1, 'call me')", [U.Ahmed]);
+  eq(await pushedTo(), ["Ahmed"], "recipients");
+  eq((await lastPush()).subs[0].badge, 1, "badge");
+});
+await ok("Muting the team room stops its pings", async () => {
+  await as("Sam", "insert into public.user_prefs (mute_team) values (true)");
+  await as("Ahmed", "insert into public.team_messages (body) values ('coffee?')");
+  eq(await pushedTo(), ["Corbin", "TJ"], "recipients");
+});
+await ok("…but an @mention still gets through", async () => {
+  await as("Ahmed", "insert into public.team_messages (body) values ('@Sam quick one')");
+  eq(await pushedTo(), ["Corbin", "Sam", "TJ"], "recipients");
+});
+await ok("No ping for a chat you have open right now", async () => {
+  await as("Ahmed", "insert into public.user_prefs (active_chat, active_at) values ($1, now())", [`dm:${U.Corbin}`]);
+  const before = await calls();
+  await as("Corbin", "insert into public.direct_messages (recipient_id, body) values ($1, 'seen?')", [U.Ahmed]);
+  eq(await calls(), before, "no push");
+});
+await ok("Voice notes show as a voice note on the lock screen", async () => {
+  await as("Ahmed", "update public.user_prefs set active_chat=null");
+  await as("Corbin", "insert into public.direct_messages (recipient_id, file_path, file_kind, file_ms) values ($1, $2, 'voice', 75000)", [U.Ahmed, `dm/${pair("Corbin", "Ahmed")}/v.m4a`]);
+  eq((await lastPush()).body, "🎤 Voice note (1:15)", "preview");
+});
+await denied("Dropping phones needs the secret", () => as("Corbin", "select public.push_gone(array['https://push.example/TJ'], 'guess')"), "Not allowed");
+await ok("The sender can drop a dead phone with the secret", async () => {
+  await db.query("select public.push_gone(array['https://push.example/TJ'], $1)", ["s".repeat(40)]);
+  eq((await db.query("select count(*)::int n from public.push_subscriptions")).rows[0].n, 3, "count");
+});
+await ok("A failed push never blocks the message", async () => {
+  await db.exec("alter function net.http_post(text, jsonb, jsonb) rename to http_post_off");
+  try {
+    await as("Corbin", "insert into public.team_messages (body) values ('still sends')");
+  } finally {
+    await db.exec("alter function net.http_post_off(text, jsonb, jsonb) rename to http_post");
+  }
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

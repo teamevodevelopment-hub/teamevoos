@@ -4,7 +4,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase, errText } from "@/lib/supabase/client";
 import { STAGE, targets, FINAL } from "@/lib/stages";
-import type { Deal, NamedRow, Notification, Profile, StageId, TeamMessage } from "@/lib/types";
+import { previewText } from "@/lib/chatFiles";
+import { registerServiceWorker, resyncPush, disablePush, setBadge } from "@/lib/push";
+import type { ChatRead, Deal, DirectMessage, NamedRow, Notification, Profile, StageId, TeamMessage } from "@/lib/types";
 
 export type Dialog =
   | { kind: "lost"; deal: Deal }
@@ -44,7 +46,16 @@ interface Portal {
   toasts: Toast[];
   unread: number;
   teamUnread: number;
-  markTeamSeen: (lastId: number) => void;
+  /** Unread message counts per chat: "team", "deal:<id>", "dm:<person id>". */
+  unreadChats: Record<string, number>;
+  /** Chats with something unread in Chats (team room + private chats). */
+  chatsUnread: number;
+  markRead: (chat: string) => void;
+  /** When each person last read each chat (for ✓✓ and "Seen by"). */
+  reads: ChatRead[];
+  online: string[];
+  muteTeam: boolean;
+  setMuteTeam: (on: boolean) => Promise<void>;
   confetti: number;
   celebrate: () => void;
   signOut: () => Promise<void>;
@@ -90,18 +101,45 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   profilesRef.current = profiles;
   const pathRef = useRef(pathname);
   pathRef.current = pathname;
-  const [teamUnread, setTeamUnread] = useState(0);
   const [confetti, setConfetti] = useState(0);
   const celebrate = useCallback(() => setConfetti((n) => n + 1), []);
+  const [unreadChats, setUnreadChats] = useState<Record<string, number>>({});
+  const [updatesUnread, setUpdatesUnread] = useState(0);
+  const [reads, setReads] = useState<ChatRead[]>([]);
+  const [online, setOnline] = useState<string[]>([]);
+  const [muteTeam, setMuteTeamState] = useState(false);
 
-  // The team room remembers the last message each person has seen (on this device).
-  const markTeamSeen = useCallback((lastId: number) => {
-    try {
-      const prev = Number(localStorage.getItem("teamSeen") || 0);
-      if (lastId > prev) localStorage.setItem("teamSeen", String(lastId));
-    } catch {}
-    setTeamUnread(0);
+  const refreshUnread = useCallback(async () => {
+    const { data } = await supabase().rpc("my_unread");
+    const u = (data ?? {}) as { chats?: Record<string, number>; updates?: number };
+    setUnreadChats(u.chats ?? {});
+    setUpdatesUnread(u.updates ?? 0);
   }, []);
+  const unreadTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const unreadSoon = useCallback(() => {
+    clearTimeout(unreadTimer.current);
+    unreadTimer.current = setTimeout(refreshUnread, 300);
+  }, [refreshUnread]);
+
+  const refreshReads = useCallback(async () => {
+    const { data } = await supabase().from("chat_reads").select("user_id,chat,last_read_at");
+    setReads((data ?? []) as ChatRead[]);
+  }, []);
+
+  // Marks a chat read now. Cleared on screen straight away; the server keeps the receipt.
+  const readTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const markRead = useCallback((chat: string) => {
+    setUnreadChats((u) => {
+      if (!(chat in u)) return u;
+      const next = { ...u };
+      delete next[chat];
+      return next;
+    });
+    clearTimeout(readTimers.current[chat]);
+    readTimers.current[chat] = setTimeout(() => {
+      supabase().rpc("mark_read", { p_chat: chat }).then(() => unreadSoon());
+    }, 400);
+  }, [unreadSoon]);
 
   const toast = useCallback((msg: string, kind: Toast["kind"] = "") => {
     const id = ++toastId.current;
@@ -162,25 +200,13 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     refreshDeals();
     refreshNotifications();
     refreshSettings();
-    (async () => {
-      let seen = 0;
-      try {
-        seen = Number(localStorage.getItem("teamSeen") || 0);
-      } catch {}
-      const sb = supabase();
-      if (!seen) {
-        // First visit on this device: start fresh rather than flag the whole history as unread.
-        const { data } = await sb.from("team_messages").select("id").order("id", { ascending: false }).limit(1);
-        if (data?.[0]) markTeamSeen(data[0].id as number);
-        return;
-      }
-      const { count } = await sb
-        .from("team_messages")
-        .select("id", { count: "exact", head: true })
-        .gt("id", seen)
-        .neq("author_id", me.id);
-      setTeamUnread(count ?? 0);
-    })();
+    refreshUnread();
+    refreshReads();
+    supabase()
+      .from("user_prefs")
+      .select("mute_team")
+      .maybeSingle()
+      .then(({ data }) => setMuteTeamState(!!data?.mute_team));
     let t: ReturnType<typeof setTimeout> | undefined;
     const soon = () => {
       clearTimeout(t);
@@ -201,10 +227,28 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
             toast(m.body === "closed" ? `🎉 ${who} just closed a deal!` : `✅ ${who}’s deal got approved!`, "ok");
           }
         }
-        if (!onTeam && m.author_id !== me.id) setTeamUnread((n) => n + 1);
+        if (m.author_id !== me.id) unreadSoon();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (x) => {
+        if ((x.new as { author_id: string | null }).author_id !== me.id) unreadSoon();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "direct_messages" }, (x) => {
+        const m = x.new as DirectMessage;
+        if (m.recipient_id !== me.id) return;
+        unreadSoon();
+        if (pathRef.current !== `/chats/${m.sender_id}`) {
+          const who = profilesRef.current.find((p) => p.id === m.sender_id)?.name ?? "Someone";
+          toast(`${who}: ${previewText(m)}`);
+        }
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_reads" }, (x) => {
+        const r = x.new as ChatRead;
+        if (!r?.chat) return;
+        setReads((list) => [...list.filter((y) => !(y.user_id === r.user_id && y.chat === r.chat)), r]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${me.id}` }, (p) => {
         refreshNotifications();
+        unreadSoon();
         if (p.eventType === "INSERT") {
           const n = p.new as Notification;
           if (!n.read_at) {
@@ -214,17 +258,64 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .subscribe();
+    // Who's online, across the whole app.
+    const pres = supabase().channel("online", { config: { presence: { key: me.id } } });
+    pres
+      .on("presence", { event: "sync" }, () => setOnline(Object.keys(pres.presenceState())))
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") pres.track({ at: Date.now() });
+      });
     const onFocus = () => {
       refreshDeals();
       refreshNotifications();
+      refreshUnread();
+      refreshReads();
     };
     window.addEventListener("focus", onFocus);
     return () => {
       clearTimeout(t);
       window.removeEventListener("focus", onFocus);
       supabase().removeChannel(ch);
+      supabase().removeChannel(pres);
     };
-  }, [me, refreshDeals, refreshNotifications, refreshSettings, toast, celebrate, markTeamSeen]);
+  }, [me, refreshDeals, refreshNotifications, refreshSettings, toast, celebrate, refreshUnread, refreshReads, unreadSoon]);
+
+  // Phone app: background worker for notifications; tapping a notification opens the right screen.
+  useEffect(() => {
+    if (!me) return;
+    registerServiceWorker().then(() => resyncPush());
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { type?: string; url?: string };
+      if (d?.type === "open" && d.url) {
+        const u = new URL(d.url, location.origin);
+        router.push(u.pathname + u.search);
+      }
+    };
+    navigator.serviceWorker?.addEventListener("message", onMsg);
+    return () => navigator.serviceWorker?.removeEventListener("message", onMsg);
+  }, [me, router]);
+
+  // Tell the server which chat is open, so nobody gets pinged about what they're already reading.
+  const dealParam = params.get("deal");
+  const activeChat =
+    pathname === "/team" ? "team" : pathname.startsWith("/chats/") ? `dm:${pathname.slice(7)}` : dealParam ? `deal:${dealParam}` : null;
+  useEffect(() => {
+    if (!me) return;
+    const beat = () => {
+      const visible = document.visibilityState === "visible";
+      supabase()
+        .from("user_prefs")
+        .upsert({ user_id: me.id, active_chat: visible ? activeChat : null, active_at: new Date().toISOString() })
+        .then(() => {});
+    };
+    beat();
+    const t = setInterval(beat, 20_000);
+    document.addEventListener("visibilitychange", beat);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", beat);
+    };
+  }, [me, activeChat]);
 
   const person = useCallback((id: string | null | undefined) => profiles.find((p) => p.id === id), [profiles]);
 
@@ -279,11 +370,35 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // This phone stops getting the person's notifications.
+    await disablePush();
+    setBadge(0);
     await supabase().auth.signOut();
     window.location.href = "/login";
   }, []);
 
   const unread = useMemo(() => notifications.filter((n) => !n.read_at).length, [notifications]);
+  const teamUnread = unreadChats.team ?? 0;
+  const chatsUnread = Object.keys(unreadChats).filter((k) => k === "team" || k.startsWith("dm:")).length;
+
+  // The red number on the home-screen icon: chats with something unread, like WhatsApp.
+  useEffect(() => {
+    const dealsWithUpdates = new Set(notifications.filter((n) => !n.read_at && n.kind === "update" && n.deal_id).map((n) => `deal:${n.deal_id}`));
+    setBadge(new Set([...Object.keys(unreadChats), ...dealsWithUpdates]).size);
+  }, [unreadChats, notifications, updatesUnread]);
+
+  const setMuteTeam = useCallback(
+    async (on: boolean) => {
+      if (!me) return;
+      setMuteTeamState(on);
+      const { error } = await supabase().from("user_prefs").upsert({ user_id: me.id, mute_team: on });
+      if (error) {
+        setMuteTeamState(!on);
+        toast(errText(error), "warn");
+      }
+    },
+    [me, toast],
+  );
 
   if (problem)
     return (
@@ -322,7 +437,13 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     toasts,
     unread,
     teamUnread,
-    markTeamSeen,
+    unreadChats,
+    chatsUnread,
+    markRead,
+    reads,
+    online,
+    muteTeam,
+    setMuteTeam,
     confetti,
     celebrate,
     signOut,

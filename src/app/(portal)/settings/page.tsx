@@ -6,6 +6,7 @@ import { Avatar, Chip } from "@/components/ui";
 import { supabase, errText } from "@/lib/supabase/client";
 import { ROLE_TITLE, STAGES, when } from "@/lib/stages";
 import type { Idea, NamedRow } from "@/lib/types";
+import { disablePush, enablePush, isIOS, pushState, type PushState } from "@/lib/push";
 
 interface AccessRow {
   id: number;
@@ -29,14 +30,92 @@ export default function SettingsPage() {
           </div>
         </div>
         <p>
-          To install the portal on your phone, open it in Safari (iPhone) or Chrome (Android) and choose <b>Add to Home Screen</b>.
+          To install the app on your iPhone, open this site in <b>Safari</b>, tap <b>Share</b>, then <b>Add to Home Screen</b>. Open it from the home-screen icon from then on.
         </p>
         <button className="btn" onClick={signOut} style={{ alignSelf: "flex-start" }}>
           Sign out
         </button>
       </section>
+      <NotificationSettings />
       {me.role === "admin" && <AdminSettings />}
     </div>
+  );
+}
+
+function NotificationSettings() {
+  const { toast, muteTeam, setMuteTeam } = usePortal();
+  const [state, setState] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    pushState().then(setState);
+  }, []);
+
+  const status: Record<PushState, string> = {
+    on: "On for this phone. Messages, mentions and deal updates show on your lock screen.",
+    off: "Off for this phone.",
+    denied: isIOS() ? "Blocked. Turn them on in your iPhone’s Settings → Notifications → Deals." : "Blocked. Allow notifications for this site in your browser settings.",
+    "needs-install": "Install the app first: in Safari tap Share → Add to Home Screen, then open it from the home screen.",
+    unsupported: "This browser can’t show notifications.",
+  };
+
+  return (
+    <section className="scard">
+      <h3>Notifications</h3>
+      <p>{state ? status[state] : "Checking…"}</p>
+      <div className="addrow" style={{ flexWrap: "wrap" }}>
+        {state === "off" && (
+          <button
+            className="btn primary"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                setState(await enablePush());
+              } catch {
+                toast("Couldn’t turn on notifications. Try again.", "warn");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Turn on
+          </button>
+        )}
+        {state === "on" && (
+          <>
+            <button
+              className="btn primary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                const { error } = await supabase().rpc("send_test_push");
+                setBusy(false);
+                if (error) toast(errText(error), "warn");
+                else toast("Test sent. Lock your phone to see it.", "ok");
+              }}
+            >
+              Send me a test
+            </button>
+            <button
+              className="btn"
+              onClick={async () => {
+                await disablePush();
+                setState(await pushState());
+              }}
+            >
+              Turn off on this phone
+            </button>
+          </>
+        )}
+      </div>
+      <label className="opt">
+        <input type="checkbox" checked={muteTeam} onChange={(e) => setMuteTeam(e.target.checked)} />
+        <span>
+          Mute the team room
+          <small style={{ display: "block", color: "var(--fg-3)" }}>You’ll still hear about @mentions of you or @team.</small>
+        </span>
+      </label>
+    </section>
   );
 }
 

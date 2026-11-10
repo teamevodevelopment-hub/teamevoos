@@ -9,6 +9,7 @@ import { ROLE_TITLE } from "@/lib/stages";
 import { DealPanel } from "./DealPanel";
 import { Dialogs } from "./Dialogs";
 import { Confetti } from "./Confetti";
+import { PushBanner } from "./PushBanner";
 
 export function useIsMobile() {
   const [m, setM] = useState(false);
@@ -22,24 +23,27 @@ export function useIsMobile() {
   return m;
 }
 
-const TITLES: Record<string, string> = { "/deals": "Deals", "/team": "Team chat", "/inbox": "Inbox", "/new": "New deal", "/settings": "Settings" };
+const TITLES: Record<string, string> = { "/deals": "Deals", "/team": "Team room", "/chats": "Chats", "/inbox": "Inbox", "/new": "New deal", "/settings": "Settings" };
 // Non-admins reach /settings only for their account (sign out), so it gets a plainer name.
 const titleFor = (path: string, admin: boolean) => (path === "/settings" && !admin ? "Account" : (TITLES[path] ?? "Deal Portal"));
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const p = usePortal();
-  const { me, deals, unread, teamUnread, confetti, layout, setLayout, setDialog, dialog, toasts, closeDeal } = p;
+  const { me, deals, unread, chatsUnread, confetti, layout, setLayout, setDialog, dialog, toasts, closeDeal, person } = p;
   const pathname = usePathname();
   const params = useSearchParams();
   const openId = Number(params.get("deal")) || null;
 
   const nav = [
     { href: "/deals", label: "Deals", icon: I.board },
-    { href: "/team", label: "Team chat", short: "Team", icon: I.team, count: pathname === "/team" ? 0 : teamUnread },
+    { href: "/chats", label: "Chats", icon: I.team, count: chatsUnread, match: ["/chats", "/team"] },
     { href: "/inbox", label: "Inbox", icon: I.inbox, count: unread },
     { href: "/new", label: "New deal", icon: I.plus },
     ...(me.role === "admin" ? [{ href: "/settings", label: "Settings", icon: I.gear }] : []),
   ];
+
+  const here = (n: { href: string; match?: string[] }) => (n.match ?? [n.href]).some((m) => pathname === m || pathname.startsWith(m + "/"));
+  const dmWith = pathname.startsWith("/chats/") ? person(pathname.slice(7)) : undefined;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -63,6 +67,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
         : `${active} active deal${active === 1 ? "" : "s"} across the team`
       : pathname === "/team"
         ? "Everyone on the team · type @team to ping all"
+        : pathname === "/chats"
+          ? "Team room and private chats"
+          : dmWith
+            ? "Private chat"
         : pathname === "/inbox"
         ? `${unread} unread`
         : pathname === "/new"
@@ -79,7 +87,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <span className="mark">{I.logo}</span>Deal Portal
           </div>
           {nav.map((n) => (
-            <Link key={n.href} href={n.href} className="nav" aria-current={pathname === n.href ? "page" : undefined}>
+            <Link key={n.href} href={n.href} className="nav" aria-current={here(n) ? "page" : undefined}>
               {n.icon}
               {n.label}
               {n.count ? <span className="count">{n.count}</span> : null}
@@ -103,7 +111,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </aside>
         <main className="main">
           <header className="top">
-            <h1>{titleFor(pathname, me.role === "admin")}</h1>
+            <h1>{dmWith ? dmWith.name : titleFor(pathname, me.role === "admin")}</h1>
             <span className="sub">{sub}</span>
             <span className="sp" />
             <button className="searchbtn" onClick={() => setDialog({ kind: "palette" })}>
@@ -133,6 +141,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </Link>
             </span>
           </header>
+          <PushBanner />
           <div className="view">{children}</div>
         </main>
       </div>
@@ -146,9 +155,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 <span className="plus">{I.plus}</span>New
               </Link>
             ) : (
-              <Link key={n.href} href={n.href} className="tab" aria-current={pathname === n.href ? "page" : undefined}>
+              <Link key={n.href} href={n.href} className="tab" aria-current={here(n) ? "page" : undefined}>
                 {n.icon}
-                {"short" in n && n.short ? n.short : n.label}
+                {n.label}
                 {n.count ? <span className="count">{n.count}</span> : null}
               </Link>
             ),

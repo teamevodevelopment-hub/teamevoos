@@ -129,6 +129,48 @@ export const I: Record<string, ReactNode> = {
       <path d="M5 12.5l4.5 4.5L19 7.5" />
     </svg>
   ),
+  checks: (
+    <svg viewBox="0 0 24 24" {...s} strokeWidth={2.2}>
+      <path d="M2.5 12.5L7 17l9.5-9.5M11.5 16l1 1L22 7.5" />
+    </svg>
+  ),
+  clip: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.7-7.7" />
+    </svg>
+  ),
+  mic: (
+    <svg viewBox="0 0 24 24" {...s} strokeWidth={2}>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+    </svg>
+  ),
+  play: (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" />
+    </svg>
+  ),
+  pause: (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <rect x="6.5" y="5" width="4" height="14" rx="1.2" />
+      <rect x="13.5" y="5" width="4" height="14" rx="1.2" />
+    </svg>
+  ),
+  back: (
+    <svg viewBox="0 0 24 24" {...s} strokeWidth={2}>
+      <path d="M15 5l-7 7 7 7" />
+    </svg>
+  ),
+  share: (
+    <svg viewBox="0 0 24 24" {...s} width="15" height="15" style={{ verticalAlign: "-2px" }}>
+      <path d="M12 3v12M8 7l4-4 4 4M6 11H5v9h14v-9h-1" />
+    </svg>
+  ),
+  bell: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0" />
+    </svg>
+  ),
   car: (
     <svg viewBox="0 0 24 24" {...s}>
       <path d="M5 16V12l2-5h10l2 5v4M3 12h18M5 16h14" />

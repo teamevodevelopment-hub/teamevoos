@@ -1,14 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { usePortal } from "./PortalProvider";
-import { Avatar, Chip, I, Mentionized } from "./ui";
+import { Avatar, Chip, I } from "./ui";
+import { Bubble, dayLabel, isGrouped, newDay, seenBy } from "./chat/Bubble";
+import { Composer } from "./chat/Composer";
+import type { Attachment } from "@/lib/chatFiles";
 import { useIsMobile } from "./Shell";
 import { supabase, errText } from "@/lib/supabase/client";
 import { useFocusTrap } from "@/lib/useFocusTrap";
 import {
   CONDITION_PRESETS,
   FREQ,
+  ROLE_TITLE,
   STAGE,
   calcPayment,
   canSee,
@@ -22,7 +26,7 @@ import {
   waitingText,
   when,
 } from "@/lib/stages";
-import type { Condition, Deal, DealEvent, LenderSubmission, Message, PaymentFreq, Profile } from "@/lib/types";
+import type { Condition, Deal, DealEvent, LenderSubmission, Message, PaymentFreq } from "@/lib/types";
 
 const numStr = (n: number | string | null) => (n == null ? null : String(n));
 const num = (n: number | string | null) => (n == null || n === "" ? null : Number(n));
@@ -70,7 +74,10 @@ function DealView({ d }: { d: Deal }) {
   const p = usePortal();
   const { me, person, profiles, closeDeal, tryMove, setDialog, toast, refreshDeals, refreshNotifications } = p;
   const isMobile = useIsMobile();
-  const [tab, setTab] = useState<"details" | "chat">("details");
+  // A notification about a message opens straight to the chat.
+  const [tab, setTab] = useState<"details" | "chat">(() =>
+    typeof window !== "undefined" && new URLSearchParams(location.search).get("tab") === "chat" ? "chat" : "details",
+  );
   const [messages, setMessages] = useState<Message[]>([]);
   const [events, setEvents] = useState<DealEvent[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -365,7 +372,7 @@ function DealView({ d }: { d: Deal }) {
           </div>
         </section>
 
-        <Chat d={d} messages={messages} loaded={loaded} />
+        <Chat d={d} messages={messages} loaded={loaded} visible={!isMobile || tab === "chat"} />
       </div>
     </>
   );
@@ -738,151 +745,89 @@ function LicenceSlot({ d, side, canUpload }: { d: Deal; side: "front" | "back"; 
   );
 }
 
-function Chat({ d, messages, loaded }: { d: Deal; messages: Message[]; loaded: boolean }) {
-  const { me, profiles, person, toast } = usePortal();
-  const [text, setText] = useState("");
-  const [pop, setPop] = useState<{ q: string; sel: number } | null>(null);
-  const [sending, setSending] = useState(false);
-  const ta = useRef<HTMLTextAreaElement>(null);
+function Chat({ d, messages, loaded, visible }: { d: Deal; messages: Message[]; loaded: boolean; visible: boolean }) {
+  const { me, profiles, person, toast, markRead, reads } = usePortal();
+  const [active, setActive] = useState<number | null>(null);
   const list = useRef<HTMLDivElement>(null);
-  const names = profiles.map((p) => p.name);
+  const chat = `deal:${d.id}`;
 
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight });
   }, [messages.length]);
 
-  const options = pop ? profiles.filter((p) => p.id !== me.id && p.name.toLowerCase().startsWith(pop.q.toLowerCase())) : [];
+  // Reading the chat (on screen and in front) marks it read.
+  useEffect(() => {
+    if (!visible) return;
+    const mark = () => document.visibilityState === "visible" && markRead(chat);
+    mark();
+    document.addEventListener("visibilitychange", mark);
+    return () => document.removeEventListener("visibilitychange", mark);
+  }, [visible, chat, messages.length, markRead]);
 
-  function onInput(v: string) {
-    setText(v);
-    const el = ta.current;
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  const myLast = [...messages].reverse().find((m) => m.kind === "user" && m.author_id === me.id);
+
+  async function onSend(body: string, file: Attachment | null) {
+    const { error } = await supabase().from("messages").insert({ deal_id: d.id, body, ...(file ?? {}) });
+    if (error) {
+      toast(errText(error), "warn");
+      return false;
     }
-    const m = v.slice(0, el?.selectionStart ?? v.length).match(/@(\w*)$/);
-    setPop(m ? { q: m[1], sel: 0 } : null);
-  }
-
-  function insert(p: Profile) {
-    const el = ta.current!;
-    const pos = el.selectionStart;
-    const before = text.slice(0, pos).replace(/@(\w*)$/, `@${p.name} `);
-    const next = before + text.slice(pos);
-    setText(next);
-    setPop(null);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.selectionStart = el.selectionEnd = before.length;
-    });
-  }
-
-  async function send() {
-    const body = text.trim();
-    if (!body || sending) return;
-    setSending(true);
-    const { error } = await supabase().from("messages").insert({ deal_id: d.id, body });
-    setSending(false);
-    if (error) return toast(errText(error), "warn");
-    setText("");
-    if (ta.current) ta.current.style.height = "auto";
     const tagged = profiles.filter((p) => p.id !== me.id && new RegExp(`@${p.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w])`, "i").test(body));
     const blocked = tagged.filter((p) => !canSee(p, d));
-    const ok = tagged.filter((p) => canSee(p, d));
     if (blocked.length)
       toast(`${blocked.map((p) => p.name).join(", ")} can’t see ${person(d.agent_id)?.name}’s deals, so they weren’t notified`, "warn");
-    else if (ok.length) toast(`Sent · ${ok.map((p) => p.name).join(", ")} notified`, "ok");
+    return true;
   }
 
   return (
     <section className="p-chat">
       <div className="chat-h">Conversation</div>
-      <div className="msgs" ref={list}>
+      <div className="msgs tm-list" ref={list} onClick={() => setActive(null)}>
         {!loaded && <div className="skel" style={{ height: 60 }} />}
         {loaded && !messages.length && (
           <div className="emptystate" style={{ padding: "32px 8px" }}>
-            <h3>No messages yet</h3>Talk about {d.first_name}’s deal here. Type @ to tag someone.
+            <h3>No messages yet</h3>Talk about {d.first_name}’s deal here. Type @ to tag someone, or send a photo or voice note.
           </div>
         )}
-        {messages.map((m) =>
-          m.kind === "system" ? (
-            <div key={m.id} className="sys">
-              {m.body} · {when(m.created_at)}
-            </div>
-          ) : (
-            <div key={m.id} className={`msg${m.author_id === me.id ? " me" : ""}`}>
-              <Avatar p={person(m.author_id)} />
-              <div className="b">
-                <div className="h">
-                  <b>{person(m.author_id)?.name ?? "Former team member"}</b>
-                  <small>{when(m.created_at)}</small>
+        {messages.map((m, i) => {
+          const prev = messages[i - 1];
+          if (m.kind === "system")
+            return (
+              <Fragment key={m.id}>
+                {newDay(prev, m) && <div className="tm-day"><span>{dayLabel(m.created_at)}</span></div>}
+                <div className="sys">
+                  {m.body} · {when(m.created_at)}
                 </div>
-                <div className="x">
-                  <Mentionized text={m.body} names={names} />
-                </div>
-              </div>
-            </div>
-          ),
-        )}
+              </Fragment>
+            );
+          const seen = m.id === myLast?.id ? seenBy(reads, chat, m, me.id, person) : [];
+          return (
+            <Fragment key={m.id}>
+              {newDay(prev, m) && <div className="tm-day"><span>{dayLabel(m.created_at)}</span></div>}
+              <Bubble
+                m={m}
+                idPrefix="dc"
+                grouped={isGrouped(prev, m)}
+                mine={m.author_id === me.id}
+                canDelete={false}
+                author={person(m.author_id)}
+                active={active === m.id}
+                onActivate={() => setActive((a) => (a === m.id ? null : m.id))}
+                footer={seen.length > 0 && <div className="seenby">Seen by {seen.join(", ")}</div>}
+              />
+            </Fragment>
+          );
+        })}
       </div>
-      <form
-        className="composer"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
-      >
-        {pop && options.length > 0 && (
-          <div className="mpop" role="listbox">
-            {options.map((p, i) => (
-              <button type="button" key={p.id} className={i === pop.sel ? "sel" : ""} onMouseDown={(e) => e.preventDefault()} onClick={() => insert(p)}>
-                <Avatar p={p} size="sm" />
-                {p.name}
-                <small>{canSee(p, d) ? { admin: "Admin", lead: "Team lead", agent: "Agent" }[p.role] : "Can’t see this deal"}</small>
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="box">
-          <textarea
-            ref={ta}
-            id="composer-text"
-            rows={1}
-            value={text}
-            placeholder={`Message about ${d.first_name}… type @ to tag`}
-            aria-label="Message"
-            onChange={(e) => onInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (pop && options.length) {
-                if (e.key === "ArrowDown") {
-                  e.preventDefault();
-                  return setPop({ ...pop, sel: Math.min(pop.sel + 1, options.length - 1) });
-                }
-                if (e.key === "ArrowUp") {
-                  e.preventDefault();
-                  return setPop({ ...pop, sel: Math.max(pop.sel - 1, 0) });
-                }
-                if (e.key === "Enter" || e.key === "Tab") {
-                  e.preventDefault();
-                  return insert(options[pop.sel]);
-                }
-                if (e.key === "Escape") {
-                  e.stopPropagation();
-                  return setPop(null);
-                }
-              }
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-          />
-          <button className="btn primary" aria-label="Send" style={{ padding: "7px 9px" }} disabled={sending || !text.trim()}>
-            {I.send}
-          </button>
-        </div>
-        <div className="tip">Enter to send · Shift+Enter for a new line</div>
-      </form>
+      <Composer
+        id="composer-text"
+        folder={`deal/${d.id}`}
+        placeholder={`Message about ${d.first_name}… @ to tag`}
+        mentionables={profiles
+          .filter((p) => p.id !== me.id)
+          .map((p) => ({ key: p.id, label: p.name, profile: p, sub: canSee(p, d) ? ROLE_TITLE[p.role] : "Can’t see this deal" }))}
+        onSend={onSend}
+      />
     </section>
   );
 }

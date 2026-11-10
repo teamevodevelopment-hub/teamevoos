@@ -59,8 +59,8 @@ function InStage({ d, short }: { d: Deal; short?: boolean }) {
 }
 
 function Card({ d, draggable }: { d: Deal; draggable: boolean }) {
-  const { person, openDeal, notifications, flash } = usePortal();
-  const unread = notifications.some((n) => n.deal_id === d.id && !n.read_at);
+  const { person, openDeal, notifications, flash, unreadChats } = usePortal();
+  const unread = !!unreadChats[`deal:${d.id}`] || notifications.some((n) => n.deal_id === d.id && !n.read_at);
   const conds = d.deal_conditions ?? [];
   const condsDone = conds.filter((c) => c.done_at).length;
   return (
