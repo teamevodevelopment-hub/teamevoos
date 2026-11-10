@@ -1,10 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Instrument_Sans, JetBrains_Mono } from "next/font/google";
+// Fonts ship with the app (no download from Google at build time, which failed on Vercel).
+import "@fontsource-variable/bricolage-grotesque";
+import "@fontsource-variable/instrument-sans";
+import "@fontsource/jetbrains-mono/500.css";
 import "./globals.css";
-
-const display = Bricolage_Grotesque({ subsets: ["latin"], weight: ["600", "700"], variable: "--ff-display" });
-const body = Instrument_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], variable: "--ff-body" });
-const mono = JetBrains_Mono({ subsets: ["latin"], weight: ["500"], variable: "--ff-mono" });
 
 // Every page depends on who is signed in, so nothing is pre-rendered at build time.
 export const dynamic = "force-dynamic";
@@ -28,7 +27,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en-CA" className={`${display.variable} ${body.variable} ${mono.variable}`}>
+    <html lang="en-CA">
       <body>{children}</body>
     </html>
   );

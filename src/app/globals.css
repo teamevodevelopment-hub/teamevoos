@@ -2,6 +2,7 @@
 body{margin:0}
 img{max-width:100%}
 [hidden]{display:none!important}
+:root{--ff-display:"Bricolage Grotesque Variable";--ff-body:"Instrument Sans Variable";--ff-mono:"JetBrains Mono"}
 /* Layout: app shell — sidebar + working area on computers; bottom tab bar + full-screen deal on phones. Deal opens in a side panel (details | chat). */
 :root{
   --bg:#F5F6F8; --surface:#FFFFFF; --surface-2:#EEF0F4; --line:#E1E4EA; --line-2:#D3D7DF;
