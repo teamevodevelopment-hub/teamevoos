@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/20261110000000_init.sql", import.meta.url), "utf8");
-const laterMigrations = ["20261110000001_remove_2fa.sql", "20261110000002_team_chat.sql"].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
+const laterMigrations = ["20261110000001_remove_2fa.sql", "20261110000002_team_chat.sql", "20261110000003_auto_finance.sql"].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
 const db = new PGlite();
 
 await db.exec(`
@@ -204,7 +204,8 @@ await denied("Can't rewrite a notification's text", () => as("Corbin", "update p
 await ok("Can mark own notifications read", () => as("Corbin", "update public.notifications set read_at=now() where read_at is null"));
 
 console.log("\nVehicle and settings");
-await denied("Agent can't edit the vehicle", () => as("Corbin", "update public.deals set vehicle_desc='Civic' where id=$1", [a1]), "Only TJ or Sam");
+await denied("Agent can't set the vehicle price", () => as("Corbin", "update public.deals set vehicle_price=25000 where id=$1", [a1]), "Only TJ or Sam");
+await denied("Agent can't set the dealer", () => as("Corbin", "update public.deals set dealer='Downtown Toyota' where id=$1", [a1]), "Only TJ or Sam");
 await ok("Agent can edit customer details", () => as("Corbin", "update public.deals set phone='416-555-0100' where id=$1", [a1]));
 await denied("Agent can't add lenders to the list", () => as("Corbin", "insert into public.lenders (name) values ('X')"));
 await ok("TJ can add lenders to the list", () => as("TJ", "insert into public.lenders (name) values ('Desjardins')"));
@@ -268,6 +269,44 @@ await ok("Closing a deal posts a celebration that names the agent, not the custo
   eq(rows.map((r) => r.body), ["approved", "closed"], "celebrations");
   if (rows.some((r) => r.author_id !== U.Ahmed || /Test|Customer/.test(r.body))) throw new Error("leaked customer or wrong agent");
   eq((await as("Corbin", "select count(*)::int n from public.deals where id=$1", [d])).rows[0].n, 0, "Corbin still can't open the deal");
+});
+
+console.log("\nAuto-finance details");
+let af, afSub, cond;
+await ok("Setup: a deal submitted to a lender", async () => {
+  af = await newDeal("Corbin");
+  await as("Corbin", "select public.move_deal($1,'docs')", [af]);
+  await as("Corbin", "select public.move_deal($1,'ready')", [af]);
+  await as("TJ", "select public.add_lenders($1, array['Scotiabank'])", [af]);
+  afSub = (await as("TJ", "select id from public.lender_submissions where deal_id=$1", [af])).rows[0].id;
+});
+await ok("Agent fills in vehicle and trade-in on own deal", () =>
+  as("Corbin", "update public.deals set vehicle_year=2022, vehicle_make='Toyota', vehicle_model='RAV4', vehicle_km=45000, vin='2T3W1RFV8NW123456', down_payment=2000, trade_in_desc='2014 Civic', trade_in_value=4500 where id=$1", [af]));
+await denied("A VIN must be 17 valid characters", () => as("Corbin", "update public.deals set vin='ABC123' where id=$1", [af]));
+await ok("TJ records approval terms", async () => {
+  await as("TJ", "select public.set_lender_terms($1, 28500, 8.99, 84, 452.10, 'monthly', 'POI + void cheque')", [afSub]);
+  const r = (await as("Corbin", "select amount::float, rate::float, term_months, payment_freq, terms from public.lender_submissions where id=$1", [afSub])).rows[0];
+  eq([r.amount, r.rate, r.term_months, r.payment_freq, r.terms], [28500, 8.99, 84, "monthly", "POI + void cheque"], "terms");
+});
+await denied("Agent can't record approval terms", () => as("Corbin", "select public.set_lender_terms($1, 1, 1, 12, 1, 'monthly', null)", [afSub]), "Only TJ or Sam");
+await ok("Agent adds a condition on own deal", async () => {
+  cond = (await as("Corbin", "insert into public.deal_conditions (deal_id, label) values ($1, 'Proof of income') returning id", [af])).rows[0].id;
+});
+await denied("Agent can't add a condition to someone else's deal", () => as("Ahmed", "insert into public.deal_conditions (deal_id, label) values ($1, 'x')", [af]));
+await denied("Can't add a condition that's already ticked", () => as("Corbin", "insert into public.deal_conditions (deal_id, label, done_at) values ($1, 'x', now())", [af]));
+await denied("Can't tick a condition directly, skipping the record", () =>
+  as("Corbin", "update public.deal_conditions set done_at=now() where id=$1 returning id", [cond]).then((r) => { if (!r.rows.length) throw new Error("no rows changed"); }));
+await ok("Agent ticks a condition, and it records who", async () => {
+  await as("Corbin", "select public.toggle_condition($1, true)", [cond]);
+  const r = (await as("Sam", "select done_by from public.deal_conditions where id=$1", [cond])).rows[0];
+  eq(r.done_by, U.Corbin, "done_by");
+});
+await denied("Ahmed can't see or tick Corbin's conditions", () => as("Ahmed", "select public.toggle_condition($1, false)", [cond]), "not found");
+await denied("Agent can't remove a ticked condition", () =>
+  as("Corbin", "delete from public.deal_conditions where id=$1 returning id", [cond]).then((r) => { if (!r.rows.length) throw new Error("no rows removed"); }));
+await ok("Sam can remove any condition", async () => {
+  const r = await as("Sam", "delete from public.deal_conditions where id=$1 returning id", [cond]);
+  eq(r.rows.length, 1, "removed");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

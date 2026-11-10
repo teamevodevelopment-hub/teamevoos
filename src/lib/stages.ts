@@ -1,4 +1,4 @@
-import type { Deal, Profile, Role, StageId } from "./types";
+import type { Deal, LenderSubmission, PaymentFreq, Profile, Role, StageId } from "./types";
 
 export const STAGES: { id: StageId; name: string; color: string }[] = [
   { id: "new", name: "New lead", color: "--s-new" },
@@ -104,3 +104,91 @@ export function when(iso: string) {
   if (d.toDateString() === y.toDateString()) return `Yesterday ${time}`;
   return d.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
 }
+
+// ───────────── Late limits ─────────────
+
+/** Days a deal can sit in each stage before it's flagged late. Final stages never go late. */
+export const LATE_AFTER: Partial<Record<StageId, number>> = { new: 1, docs: 2, ready: 1, submitted: 2, approved: 3, car: 7 };
+
+export function isLate(d: Pick<Deal, "stage" | "stage_changed_at">) {
+  const limit = LATE_AFTER[d.stage];
+  return limit != null && daysSince(d.stage_changed_at) >= limit;
+}
+
+export function lateText(d: Pick<Deal, "stage" | "stage_changed_at">) {
+  const limit = LATE_AFTER[d.stage] ?? 0;
+  return `${daysSince(d.stage_changed_at)} days in ${STAGE[d.stage].name}. The limit is ${limit} day${limit === 1 ? "" : "s"}.`;
+}
+
+// ───────────── Money ─────────────
+
+const CAD = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
+const CAD2 = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** $28,500 */
+export const money = (n: number) => CAD.format(n);
+/** $452.10 */
+export const money2 = (n: number) => CAD2.format(n);
+/** $28.5k, $1.2M: for tight spaces like cards and column headers. */
+export function moneyShort(n: number) {
+  const trim = (x: string) => x.replace(/\.0$/, "");
+  if (n >= 1e6) return `$${trim((n / 1e6).toFixed(1))}M`;
+  if (n >= 1e4) return `$${trim((n / 1e3).toFixed(n >= 1e5 ? 0 : 1))}k`;
+  return money(n);
+}
+/** Reads "$28,500", "28.5k" or "28500" typed by a person. Empty → null, unreadable → NaN. */
+export function parseMoney(v: string): number | null {
+  const t = v.trim().toLowerCase().replace(/[$,\s]/g, "");
+  if (!t) return null;
+  const k = t.endsWith("k");
+  const n = Number(k ? t.slice(0, -1) : t);
+  return Number.isFinite(n) ? Math.round(n * (k ? 1000 : 1) * 100) / 100 : NaN;
+}
+
+export const FREQ: Record<PaymentFreq, { label: string; short: string; perYear: number }> = {
+  monthly: { label: "Monthly", short: "mo", perYear: 12 },
+  biweekly: { label: "Bi-weekly", short: "bi-wk", perYear: 26 },
+  weekly: { label: "Weekly", short: "wk", perYear: 52 },
+};
+
+/** Standard loan payment for the amount, yearly rate (%) and term. An estimate: the lender's number wins. */
+export function calcPayment(amount: number | null, rate: number | null, months: number | null, freq: PaymentFreq | null) {
+  if (!amount || !months || rate == null) return null;
+  const per = FREQ[freq ?? "monthly"].perYear;
+  const n = Math.round((months / 12) * per);
+  const r = rate / 100 / per;
+  const p = r ? (amount * r) / (1 - Math.pow(1 + r, -n)) : amount / n;
+  return Math.round(p * 100) / 100;
+}
+
+/** The approval that matters on a deal: the biggest approved amount, or the first approval. */
+export function bestApproval(d: Pick<Deal, "lender_submissions">): LenderSubmission | undefined {
+  const ok = d.lender_submissions.filter((l) => l.status === "approved");
+  return [...ok].sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0))[0];
+}
+
+/** "Scotiabank · $28.5k · 8.99% · 84 mo" */
+export function approvalLine(l: LenderSubmission) {
+  const bits = [l.lender];
+  if (l.amount) bits.push(moneyShort(Number(l.amount)));
+  if (l.rate != null) bits.push(`${Number(l.rate)}%`);
+  if (l.term_months) bits.push(`${l.term_months} mo`);
+  if (bits.length === 1 && l.terms) bits.push(l.terms.split(" · ")[0]);
+  return bits.join(" · ");
+}
+
+/** The deal's dollar value for totals: approved amount, else the vehicle price. */
+export function dealAmount(d: Deal): number | null {
+  const a = bestApproval(d)?.amount ?? d.vehicle_price;
+  return a == null ? null : Number(a);
+}
+
+// ───────────── Vehicle ─────────────
+
+/** "2022 Toyota RAV4 LE", falling back to the older one-line description. */
+export function vehicleLine(d: Deal) {
+  const s = [d.vehicle_year, d.vehicle_make, d.vehicle_model, d.vehicle_trim].filter(Boolean).join(" ");
+  return s || d.vehicle_desc || "";
+}
+
+export const CONDITION_PRESETS = ["Proof of income", "Proof of address", "Void cheque", "References", "Insurance"];

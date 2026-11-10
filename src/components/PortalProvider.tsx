@@ -112,7 +112,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   const refreshDeals = useCallback(async () => {
     const { data, error } = await supabase()
       .from("deals")
-      .select("*, lender_submissions(*)")
+      .select("*, lender_submissions(*), deal_conditions(*)")
       .order("stage_changed_at", { ascending: false });
     if (error) return toast(errText(error), "warn");
     setDeals((data ?? []) as Deal[]);
@@ -190,6 +190,7 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
       .channel("portal")
       .on("postgres_changes", { event: "*", schema: "public", table: "deals" }, soon)
       .on("postgres_changes", { event: "*", schema: "public", table: "lender_submissions" }, soon)
+      .on("postgres_changes", { event: "*", schema: "public", table: "deal_conditions" }, soon)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, (x) => {
         const m = x.new as TeamMessage;
         const onTeam = pathRef.current === "/team";

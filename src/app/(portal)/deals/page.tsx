@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { usePortal } from "@/components/PortalProvider";
 import { useIsMobile } from "@/components/Shell";
 import { Avatar, Chip, I } from "@/components/ui";
-import { FINAL, STAGE, STAGES, daysSince, fullName, targets, yourMove } from "@/lib/stages";
+import { STAGE, STAGES, approvalLine, bestApproval, daysSince, dealAmount, fullName, isLate, lateText, moneyShort, targets, vehicleLine, yourMove } from "@/lib/stages";
+import { Stats } from "./Stats";
 import type { Deal, StageId } from "@/lib/types";
 
 function subline(d: Deal) {
@@ -23,13 +24,19 @@ function subline(d: Deal) {
     case "submitted":
       return subs.map((l) => l.lender).join(", ") || "No lenders added yet";
     case "approved": {
-      const a = subs.find((l) => l.status === "approved");
-      return a ? `${a.lender}${a.terms ? " · " + a.terms.split(" · ")[0] : ""}` : "Approved";
+      const a = bestApproval(d);
+      return a ? approvalLine(a) : "Approved";
     }
-    case "car":
-      return d.vehicle_desc || "Choosing a vehicle";
-    case "closed":
-      return d.vehicle_desc ? `${d.vehicle_desc}${d.vehicle_price ? " · $" + Number(d.vehicle_price).toLocaleString("en-CA") : ""}` : "Closed";
+    case "car": {
+      const v = vehicleLine(d);
+      const a = bestApproval(d);
+      return v || (a ? `Choosing a vehicle · ${approvalLine(a)}` : "Choosing a vehicle");
+    }
+    case "closed": {
+      const v = vehicleLine(d);
+      const amt = dealAmount(d);
+      return [v, amt ? moneyShort(amt) : ""].filter(Boolean).join(" · ") || "Closed";
+    }
     case "declined":
       return `Declined by ${subs.length} lender${subs.length === 1 ? "" : "s"}`;
     case "lost":
@@ -38,10 +45,12 @@ function subline(d: Deal) {
 }
 
 /** Days in the current stage. Late deals get a warning icon and the word "late", not just a colour. */
-function InStage({ days, late, short }: { days: number; late: boolean; short?: boolean }) {
+function InStage({ d, short }: { d: Deal; short?: boolean }) {
+  const days = daysSince(d.stage_changed_at);
+  const late = isLate(d);
   const text = days === 0 ? "Today" : short ? `${days}d` : `${days} day${days === 1 ? "" : "s"}`;
   return (
-    <span className={late ? "late" : ""} title={late ? `${days} days in this stage, needs attention` : undefined}>
+    <span className={late ? "late" : ""} title={late ? lateText(d) : undefined}>
       {late ? I.alert : I.clock}
       {text}
       {late && (short ? <span className="sr-only"> in stage, late</span> : " · late")}
@@ -51,9 +60,9 @@ function InStage({ days, late, short }: { days: number; late: boolean; short?: b
 
 function Card({ d, draggable }: { d: Deal; draggable: boolean }) {
   const { person, openDeal, notifications, flash } = usePortal();
-  const days = daysSince(d.stage_changed_at);
-  const late = days >= 3 && !FINAL.includes(d.stage);
   const unread = notifications.some((n) => n.deal_id === d.id && !n.read_at);
+  const conds = d.deal_conditions ?? [];
+  const condsDone = conds.filter((c) => c.done_at).length;
   return (
     <article
       className={`card${flash === d.id ? " flash" : ""}`}
@@ -86,11 +95,17 @@ function Card({ d, draggable }: { d: Deal; draggable: boolean }) {
       <div className="card-s">{subline(d)}</div>
       <div className="card-m">
         <Avatar p={person(d.agent_id)} size="sm" />
-        <InStage days={days} late={late} short />
+        <InStage d={d} short />
         {d.lender_submissions.length > 0 && (
           <span>
             {I.bank}
             {d.lender_submissions.length}
+          </span>
+        )}
+        {conds.length > 0 && (
+          <span className={condsDone === conds.length ? "conds-done" : ""} title={`${condsDone} of ${conds.length} conditions received`}>
+            {I.check}
+            {condsDone}/{conds.length}
           </span>
         )}
       </div>
@@ -133,6 +148,7 @@ export default function DealsPage() {
     };
     return (
       <>
+        <Stats />
         <div className="mstages">
           {STAGES.map((s) => (
             <button key={s.id} className="mstage" data-mstage={s.id} aria-pressed={mstage === s.id} onClick={() => setMstage(s.id)}>
@@ -173,6 +189,8 @@ export default function DealsPage() {
     const order = STAGES.map((s) => s.id);
     const rows = [...deals].sort((a, b) => order.indexOf(a.stage) - order.indexOf(b.stage));
     return (
+      <>
+      <Stats />
       <div className="tablewrap">
         <table>
           <thead>
@@ -181,14 +199,14 @@ export default function DealsPage() {
               <th>Stage</th>
               <th>Agent</th>
               <th>Lenders</th>
+              <th>Amount</th>
               <th>In stage</th>
               <th>Dealertrack</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((d) => {
-              const days = daysSince(d.stage_changed_at);
-              const late = days >= 3 && !FINAL.includes(d.stage);
+              const amt = dealAmount(d);
               return (
                 <tr key={d.id} onClick={() => openDeal(d.id)}>
                   <td>
@@ -223,8 +241,9 @@ export default function DealsPage() {
                       <span style={{ color: "var(--fg-3)" }}>—</span>
                     )}
                   </td>
+                  <td className="tnum">{amt ? moneyShort(amt) : <span style={{ color: "var(--fg-3)" }}>—</span>}</td>
                   <td className="tnum instage">
-                    <InStage days={days} late={late} />
+                    <InStage d={d} />
                   </td>
                   <td className="mono">{d.dealertrack_no || <span style={{ color: "var(--fg-3)" }}>—</span>}</td>
                 </tr>
@@ -233,10 +252,13 @@ export default function DealsPage() {
           </tbody>
         </table>
       </div>
+      </>
     );
   }
 
   return (
+    <div className="deals-wrap">
+    <Stats />
     <div
       className="board"
       onDragStartCapture={(e) => {
@@ -250,6 +272,7 @@ export default function DealsPage() {
     >
       {STAGES.map((s) => {
         const list = deals.filter((d) => d.stage === s.id);
+        const total = ["approved", "car", "closed"].includes(s.id) ? list.reduce((t, d) => t + (dealAmount(d) ?? 0), 0) : 0;
         const cls = over?.col === s.id ? (over.ok ? " over" : " nope") : "";
         return (
           <section
@@ -276,6 +299,7 @@ export default function DealsPage() {
             <div className="col-h">
               <Chip stage={s.id} />
               <span className="n">{list.length}</span>
+              {total > 0 && <span className="n tnum colsum">{moneyShort(total)}</span>}
               {yourMove(s.id, me.role) && list.length > 0 && <span className="yourmove">Your move</span>}
             </div>
             <div className="col-b">
@@ -284,6 +308,7 @@ export default function DealsPage() {
           </section>
         );
       })}
+    </div>
     </div>
   );
 }

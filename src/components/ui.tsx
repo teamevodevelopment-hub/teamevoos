@@ -124,6 +124,18 @@ export const I: Record<string, ReactNode> = {
       <path d="M3.6 11.2c2.6-.9 5.4-1.3 8.4-1.3s5.8.4 8.4 1.3M9.9 13.6L7.4 19.2M14.1 13.6l2.5 5.6" />
     </svg>
   ),
+  check: (
+    <svg viewBox="0 0 24 24" {...s} strokeWidth={2.2}>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
+  ),
+  car: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M5 16V12l2-5h10l2 5v4M3 12h18M5 16h14" />
+      <circle cx="7.5" cy="16.5" r="1.8" />
+      <circle cx="16.5" cy="16.5" r="1.8" />
+    </svg>
+  ),
   trophy: (
     <svg viewBox="0 0 24 24" {...s}>
       <path d="M8 4h8v5a4 4 0 0 1-8 0z" />

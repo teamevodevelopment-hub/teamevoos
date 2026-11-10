@@ -23,7 +23,24 @@ export interface LenderSubmission {
   lender: string;
   status: "pending" | "approved" | "declined";
   terms: string | null;
+  amount: number | null;
+  rate: number | null;
+  term_months: number | null;
+  payment: number | null;
+  payment_freq: PaymentFreq | null;
   submitted_at: string;
+}
+
+export type PaymentFreq = "monthly" | "biweekly" | "weekly";
+
+export interface Condition {
+  id: number;
+  deal_id: number;
+  label: string;
+  done_at: string | null;
+  done_by: string | null;
+  created_by: string;
+  created_at: string;
 }
 
 export interface Deal {
@@ -44,10 +61,20 @@ export interface Deal {
   vehicle_desc: string | null;
   vehicle_price: number | null;
   dealer: string | null;
+  vehicle_year: number | null;
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  vehicle_trim: string | null;
+  vehicle_km: number | null;
+  vin: string | null;
+  down_payment: number | null;
+  trade_in_desc: string | null;
+  trade_in_value: number | null;
   stage_changed_at: string;
   created_at: string;
   updated_at: string;
   lender_submissions: LenderSubmission[];
+  deal_conditions: Condition[];
 }
 
 export interface Message {
