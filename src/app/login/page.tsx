@@ -20,7 +20,7 @@ export default function LoginPage() {
       setBusy(false);
       return;
     }
-    window.location.href = "/mfa";
+    window.location.href = "/deals";
   }
 
   return (

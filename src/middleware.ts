@@ -41,13 +41,7 @@ export async function middleware(request: NextRequest) {
     return PUBLIC_PATHS.includes(path) ? response : redirect("/login");
   }
 
-  // Everyone must pass two-step verification before seeing any deal.
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  const verified = aal?.currentLevel === "aal2";
-
-  if (!verified && path !== "/mfa") return redirect("/mfa");
-  if (verified && (path === "/login" || path === "/mfa" || path === "/")) return redirect("/deals");
-  if (path === "/") return redirect("/deals");
+  if (path === "/login" || path === "/") return redirect("/deals");
 
   return response;
 }

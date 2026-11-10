@@ -5,13 +5,13 @@ The team's auto-finance deal tracker: pipeline board, a chat on each deal with @
 ## Setup (one time)
 
 1. **Create the Supabase project.** At supabase.com, create a new project and pick the **Canada (Central)** region. Keep the database password somewhere safe.
-2. **Create the database.** In the project, open **SQL Editor**, paste all of `supabase/migrations/20261110000000_init.sql`, and run it.
+2. **Create the database.** In the project, open **SQL Editor** and run each file in `supabase/migrations/`, oldest first.
 3. **Lock sign-ups.** Go to **Authentication → Sign In / Providers** and turn off **Allow new users to sign up**. Only people TJ adds can get in.
 4. **Add the team.** Under **Authentication → Users → Add user**, create TJ, Sam, Corbin and Ahmed with their email and a temporary password, and tick **Auto confirm**.
 5. **Set names and roles.** Put the real emails into `supabase/setup_team.sql`, then run it in the SQL Editor. The last line should list TJ as admin, Sam as lead, and Corbin and Ahmed as agents.
 6. **Connect the app.** Copy `.env.example` to `.env.local` and fill in the project URL and the anon (publishable) key from **Project Settings → API**.
 
-The first time each person signs in, the app asks them to set up two-step verification with an authenticator app. Nobody can see any deal until they have.
+People sign in with their email and password. Anyone without a team profile sees nothing.
 
 ## Running it
 

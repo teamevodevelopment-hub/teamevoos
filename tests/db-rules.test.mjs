@@ -4,6 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/20261110000000_init.sql", import.meta.url), "utf8");
+const laterMigrations = ["20261110000001_remove_2fa.sql"].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
 const db = new PGlite();
 
 await db.exec(`
@@ -19,6 +20,7 @@ await db.exec(`
   create publication supabase_realtime;
 `);
 await db.exec(migration);
+for (const m of laterMigrations) await db.exec(m);
 await db.exec(`
   grant usage on schema public, auth, storage to authenticated;
   grant select, insert, update, delete on all tables in schema public to authenticated;
@@ -100,8 +102,14 @@ await ok("Corbin sees only his deals", async () => {
   if (!r.rows.length || r.rows.some((x) => x.agent_id !== U.Corbin)) throw new Error("saw other deals");
 });
 await ok("Sam sees every deal", async () => eq((await as("Sam", "select count(*)::int n from public.deals")).rows[0].n, 3, "count"));
-await ok("Without two-step verification nobody sees anything", async () =>
-  eq((await as("TJ", "select count(*)::int n from public.deals", [], "aal1")).rows[0].n, 0, "count"));
+await ok("Signing in without two-step verification works", async () =>
+  eq((await as("TJ", "select count(*)::int n from public.deals", [], "aal1")).rows[0].n, 3, "count"));
+await ok("A login with no team profile sees nothing", async () => {
+  U.Stranger = "00000000-0000-0000-0000-000000000009";
+  await db.query(`insert into auth.users (id, email) values ($1, 'stranger@x.com')`, [U.Stranger]);
+  await db.query(`delete from public.profiles where id = $1`, [U.Stranger]);
+  eq((await as("Stranger", "select count(*)::int n from public.deals", [], "aal1")).rows[0].n, 0, "count");
+});
 await ok("Corbin can't read Ahmed's chat", async () =>
   eq((await as("Corbin", "select count(*)::int n from public.messages where deal_id=$1", [a1])).rows[0].n, 0, "count"));
 
