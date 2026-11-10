@@ -102,7 +102,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="app">
         <aside className="side">
           <div className="brand">
-            <span className="mark">{I.logo}</span>Deal Portal
+            {/* The sidebar is always dark, so it uses the white version of the logo. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/logo-dark.png" alt="easyAuto" width={164} height={52} />
+            <span className="brand-sub">Deal portal</span>
           </div>
           {nav.map((n) => (
             <Link key={n.href} href={n.href} className="nav" aria-current={here(n) ? "page" : undefined}>

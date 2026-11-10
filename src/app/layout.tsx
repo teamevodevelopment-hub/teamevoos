@@ -9,9 +9,9 @@ import "./globals.css";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Deal Portal",
+  title: "easyAuto Deal Portal",
   description: "Auto-finance deals, from first call to closed.",
-  appleWebApp: { capable: true, title: "Deals", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "easyAuto", statusBarStyle: "default" },
   robots: { index: false, follow: false },
 };
 

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { supabase, errText } from "@/lib/supabase/client";
-import { I } from "@/components/ui";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -26,9 +25,10 @@ export default function LoginPage() {
   return (
     <main className="auth">
       <form className="authcard" onSubmit={submit}>
-        <div className="brand">
-          <span className="mark">{I.logo}</span>Deal Portal
-        </div>
+        <picture className="auth-logo">
+          <source srcSet="/brand/logo-full-dark.png" media="(prefers-color-scheme: dark)" />
+          <img src="/brand/logo-full.png" alt="easyAuto · Car financing · Car dealer" width={300} height={107} />
+        </picture>
         <div>
           <h1>Sign in</h1>
           <p>Use the email TJ set up for you.</p>

@@ -1,4 +1,4 @@
-// Deal Portal background worker: shows push notifications and opens the right chat when one is tapped.
+// easyAuto Deal Portal background worker: shows push notifications and opens the right chat when one is tapped.
 // No offline caching: the app always loads fresh from the server.
 
 self.addEventListener("install", () => self.skipWaiting());
@@ -11,10 +11,10 @@ self.addEventListener("push", (event) => {
   } catch {
     d = { body: event.data ? event.data.text() : "" };
   }
-  const shown = self.registration.showNotification(d.title || "Deal Portal", {
+  const shown = self.registration.showNotification(d.title || "easyAuto", {
     body: d.body || "",
-    icon: "/icons/192",
-    badge: "/icons/96",
+    icon: "/icons/icon-192.png",
+    badge: "/icons/icon-96.png",
     tag: d.tag || undefined,
     renotify: !!d.tag,
     data: { url: d.url || "/deals" },

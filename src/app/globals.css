@@ -708,3 +708,17 @@ html,body{height:var(--app-h,100%)}
   .pay select{flex:none;width:40%}
   .cond small{margin-top:-6px;padding-bottom:10px}
 }
+
+/* ── easyAuto brand: the navy and blue from the logo ── */
+:root{--accent:#0B1D3A;--accent-2:#07152B;--accent-soft:#E6ECF5;--brand:#134A94;--brand-text:#134A94;--brand-soft:#E3ECF8;--on-brand:#FFFFFF;--bubble-me:#DCE7F6;--seen:#134A94}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--brand:#6EA8EE;--brand-text:#8DBBF3;--brand-soft:#15253D;--on-brand:#0D0F13;--bubble-me:#1C3050;--seen:#6EA8EE}}
+:root[data-theme="dark"]{--brand:#6EA8EE;--brand-text:#8DBBF3;--brand-soft:#15253D;--on-brand:#0D0F13;--bubble-me:#1C3050;--seen:#6EA8EE}
+/* Sidebar in the logo's navy. */
+.side{--surface:#07172F;--surface-2:#132748;--line:#132748;--line-2:#1E3560;border-right-color:#050F20}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .side{--surface:#06101F;--surface-2:#122039;--line:#122039;--line-2:#1C2E4E}}
+:root[data-theme="dark"] .side{--surface:#06101F;--surface-2:#122039;--line:#122039;--line-2:#1C2E4E}
+.side .brand{flex-direction:column;align-items:flex-start;gap:4px;padding:6px 8px 18px}
+.side .brand img{display:block;width:156px;height:auto}
+.brand-sub{font-family:var(--font-body);font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--fg-3);padding-left:2px}
+.auth-logo{display:block;align-self:center;margin:4px 0 2px}
+.auth-logo img{display:block;width:min(270px,80vw);height:auto}

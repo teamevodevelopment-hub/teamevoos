@@ -49,5 +49,5 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // The push sender (called by the database) and the background worker load without a sign-in.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|icons/|sw\\.js|api/push).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|icons/|brand/|sw\\.js|api/push).*)"],
 };
