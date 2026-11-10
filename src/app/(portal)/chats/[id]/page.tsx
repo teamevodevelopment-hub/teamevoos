@@ -99,7 +99,7 @@ export default function DirectChatPage() {
     );
 
   return (
-    <div className="dm">
+    <div className="dm convo">
       <section className="team-main">
         <header className="dm-h">
           <Link href="/chats" className="iconbtn" aria-label="Back to chats">
@@ -143,6 +143,7 @@ export default function DirectChatPage() {
                 <Bubble
                   m={m}
                   idPrefix="pm"
+                  showNames={false}
                   grouped={isGrouped(prev, m)}
                   mine={mine}
                   canDelete={mine}
@@ -181,7 +182,7 @@ export default function DirectChatPage() {
         <Composer
           id="dm-text"
           folder={`dm/${pair}`}
-          placeholder={`Message ${them.name}…`}
+          placeholder={`Message ${them.name}`}
           replyTo={replyTo ? { name: person(replyTo.sender_id)?.name ?? "Someone", text: previewText(replyTo) } : null}
           onCancelReply={() => setReplyTo(null)}
           onTyping={() => channelRef.current?.send({ type: "broadcast", event: "typing", payload: { id: me.id } })}

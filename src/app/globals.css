@@ -53,6 +53,10 @@ img{max-width:100%}
 html,body{height:100%}
 body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.45;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
+/* Links that act as buttons or tabs never show a web-link underline. */
+.nav,.tab,.btn,.iconbtn,.chatrow,.brand,.att-file,.dealchip{text-decoration:none}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{-webkit-tap-highlight-color:transparent}
 button{cursor:pointer;background:none;border:0;padding:0}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 .mono{font-family:var(--font-mono);font-size:12.5px;letter-spacing:-.01em}
@@ -534,7 +538,7 @@ body{padding-top:env(safe-area-inset-top,0px)}
 .chatrow+.chatrow{border-top:1px solid var(--line)}
 .chatrow:hover{background:var(--surface-2)}
 .chat-av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;flex:none}
-.chat-av.team{background:var(--brand);color:var(--on-brand)}
+.chat-av.room{background:var(--brand);color:var(--on-brand)}
 .chat-av svg{width:18px;height:18px}
 .chat-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .chat-l1,.chat-l2{display:flex;align-items:center;gap:8px;min-width:0}
@@ -594,3 +598,113 @@ body{padding-top:env(safe-area-inset-top,0px)}
 }
 @media (min-width:861px){.dm-h .iconbtn{display:none}}
 @media (pointer:coarse){.vplay{width:44px;height:44px}}
+
+/* ── Phone-first chat: WhatsApp-style bubbles, full-screen conversations, keyboard-aware ── */
+:root{--bubble-me:#DCE5EF;--bubble-them:var(--surface);--chat-bg:var(--bg);--seen:#1F7FBF}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bubble-me:#243247;--bubble-them:#1B1F26;--seen:#4FB0EE}}
+:root[data-theme="dark"]{--bubble-me:#243247;--bubble-them:#1B1F26;--seen:#4FB0EE}
+/* The app fills the visible screen, which shrinks when the iPhone keyboard is open. */
+html,body{height:var(--app-h,100%)}
+.panel{bottom:auto;height:var(--app-h,100%)}
+
+.tm-list{background:var(--chat-bg);padding:10px 10px 8px}
+.tm{padding:0 4px;margin-top:10px;gap:6px;align-items:flex-start;border-radius:0}
+.tm.grouped{margin-top:3px;padding:0 4px}
+.tm:hover,.tm.active{background:none}
+.tm.mine{flex-direction:row-reverse}
+.tm-av{width:28px;flex:none}
+.tm-col{display:flex;flex-direction:column;align-items:flex-start;max-width:min(78%,560px);min-width:0}
+.tm.mine .tm-col{align-items:flex-end}
+.tm-bubble{position:relative;max-width:100%;min-width:0;padding:6px 10px 6px;background:var(--bubble-them);border:1px solid var(--line);border-radius:4px 16px 16px 16px;box-shadow:0 1px 1px rgba(18,21,27,.04)}
+.tm.grouped .tm-bubble{border-radius:16px}
+.tm.mine .tm-bubble{background:var(--bubble-me);border-color:transparent;border-radius:16px 4px 16px 16px}
+.tm.mine.grouped .tm-bubble{border-radius:16px}
+.tm.active .tm-bubble{filter:brightness(.96)}
+.tm-bubble.emoji{background:none;border:0;box-shadow:none;padding:0 2px}
+.tm-bubble.photo{padding:3px}
+.tm-name{display:block;font-size:12.5px;font-weight:700;color:var(--fg-2);margin-bottom:1px}
+.tm-x{line-height:1.42}
+.tm-x.big{font-size:40px;line-height:1.15}
+.tm-meta{float:right;display:inline-flex;align-items:center;gap:3px;margin:8px -3px -4px 10px;font-size:11px;font-weight:500;line-height:1;color:var(--fg-3);white-space:nowrap;font-style:normal;letter-spacing:0}
+.tm-x.big .tm-meta{margin-top:24px}
+.tm-x-meta{display:flex;justify-content:flex-end}
+.tm-x-meta .tm-meta{float:none;margin:4px 0 0}
+.tm-bubble.photo .tm-x-meta{padding:0 7px 3px}
+.ticks svg{width:15px;height:15px}
+.ticks.seen{color:var(--seen)}
+.tm-bubble .tm-quote{display:flex;flex-direction:column;align-items:flex-start;gap:0;width:100%;margin:2px 0 5px;padding:4px 8px;border-left:3px solid var(--brand);border-radius:6px;background:color-mix(in srgb,var(--fg) 6%,transparent)}
+.tm-bubble .tm-quote b{font-size:12px;color:var(--brand-text)}
+.tm-bubble .tm-quote span{max-width:100%;font-size:12.5px}
+.tm-bubble .att-photo{margin:0;border:0;border-radius:13px;max-width:min(300px,100%)}
+.tm-bubble .att-photo img{max-height:380px}
+.tm-bubble .att-voice{border:0;background:transparent;padding:2px 0;width:min(250px,64vw)}
+.tm-bubble .att-file{margin:2px 0;border:0;background:color-mix(in srgb,var(--fg) 6%,transparent)}
+.tm-col .reacts{margin:-6px 6px 0;position:relative;z-index:1}
+.tm-col .react{box-shadow:0 1px 2px rgba(18,21,27,.1)}
+.tm.mine .seenby{text-align:right}
+.tm-actions{right:auto;left:34px;top:-18px}
+.tm.mine .tm-actions{left:auto;right:4px}
+.tm.solo .tm-actions{left:4px}
+.tm.mine.solo .tm-actions{left:auto}
+.tm-celebrate{margin:12px 6px 4px}
+.p-chat .msgs.tm-list .sys{margin:8px auto}
+.pres-stack{margin-left:auto;display:flex}
+.pres-stack .pres+.pres{margin-left:-6px}
+.pres-stack .av{box-shadow:0 0 0 2px var(--surface)}
+.dm-h .chat-av{width:36px;height:36px}
+.dm-h{min-height:56px;background:var(--surface)}
+
+@media (max-width:860px){
+  body{font-size:15px}
+  /* Inside a conversation: no app header, no tab bar, no banner. The chat is the whole screen. */
+  .app:has(.convo) .top,.app:has(.convo) .pushbanner{display:none}
+  body:has(.convo) .tabbar{display:none}
+  .view:has(.convo){padding:0!important;overflow:hidden}
+  .convo{max-width:none}
+  .convo .team-main{border:0;border-radius:0}
+  .convo .dm-h{padding:6px 10px 6px 4px;gap:8px}
+  .convo .composer{padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px))}
+  .tm-col{max-width:84%}
+  .tm-composer .box .iconbtn{width:40px;height:40px}
+  /* Notifications banner: words on top, a full-width button underneath. */
+  .pushbanner{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:10px 12px}
+  .pushbanner .btn{grid-column:1/-1;min-height:44px}
+  .pushbanner .iconbtn{margin:-6px -6px 0 0}
+  /* Tab labels line up, whatever the icon. */
+  .tab{justify-content:flex-end}
+  .tab.new .plus{height:28px;width:44px}
+  /* Inbox: time pinned to the corner instead of wrapping onto its own line. */
+  .ib{position:relative}
+  .ib .when{position:absolute;top:15px;right:16px;margin:0}
+  .ib .l1{padding-right:72px}
+  /* New deal: full width, no card inside a card, big buttons. */
+  .formcard{background:none;border:0;padding:0;border-radius:0}
+  .formcard>div:first-child h2{display:none}
+  .formfoot{flex-wrap:wrap}
+  .formfoot .note{flex-basis:100%;margin:0 0 4px}
+  .formfoot .btn{flex:1;min-height:48px}
+}
+.tm-typing{background:var(--chat-bg)}
+.tm-typing:empty{display:none}
+.tm-bubble.photo .tm-name{padding:3px 7px 3px}
+.tm-bubble.photo .tm-quote{margin:2px 0 4px;width:auto}
+@media (max-width:860px){.p-chat .chat-h{display:none}}
+.vbar{background:color-mix(in srgb,var(--fg) 14%,transparent)}
+@media (max-width:860px){
+  .pushbanner .iconbtn{grid-column:3;grid-row:1}
+  /* Deal details on a phone: label above the field, full width, and fields that look tappable. */
+  dl.kv{grid-template-columns:minmax(0,1fr);gap:0}
+  dl.kv dt{font-size:12.5px;font-weight:600;margin-top:12px;margin-bottom:4px}
+  dl.kv dt:first-child{margin-top:0}
+  dl.kv dd{min-height:20px}
+  .p-details .edit,.terms .edit{margin:0;width:100%;padding:10px 12px;background:var(--bg);border-color:var(--line);border-radius:10px}
+  .p-details textarea.edit{min-height:72px}
+  .inl select,.lrow select,.pay select{min-height:44px;padding:0 10px;border-radius:10px;font-size:16px}
+  .terms{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .lrow{padding:12px}
+}
+@media (max-width:860px){
+  .terms .tf:has(.pay){grid-column:1/-1}
+  .pay select{flex:none;width:40%}
+  .cond small{margin-top:-6px;padding-bottom:10px}
+}

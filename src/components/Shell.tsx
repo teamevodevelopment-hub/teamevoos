@@ -45,6 +45,24 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const here = (n: { href: string; match?: string[] }) => (n.match ?? [n.href]).some((m) => pathname === m || pathname.startsWith(m + "/"));
   const dmWith = pathname.startsWith("/chats/") ? person(pathname.slice(7)) : undefined;
 
+  // iPhones don't shrink the page when the keyboard opens. Size the app to the visible area instead,
+  // so the message box sits right above the keyboard, like WhatsApp.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const fit = () => {
+      document.documentElement.style.setProperty("--app-h", `${Math.round(vv.height)}px`);
+      if (window.scrollY) window.scrollTo(0, 0);
+    };
+    fit();
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+    return () => {
+      vv.removeEventListener("resize", fit);
+      vv.removeEventListener("scroll", fit);
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {

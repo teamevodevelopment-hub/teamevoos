@@ -69,7 +69,7 @@ export default function ChatsPage() {
   return (
     <div className="chats">
       <Link href="/team" className={`chatrow${unreadChats.team ? " unread" : ""}`}>
-        <span className="chat-av team">{I.team}</span>
+        <span className="chat-av room">{I.team}</span>
         <span className="chat-t">
           <span className="chat-l1">
             <b>Team room</b>

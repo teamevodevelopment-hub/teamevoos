@@ -156,7 +156,7 @@ function DealView({ d }: { d: Deal }) {
                 <Avatar p={person(d.agent_id)} size="sm" />
                 {person(d.agent_id)?.name ?? "Unassigned"}’s deal
               </span>
-              <span>· {days === 0 ? "Moved today" : `${days} day${days === 1 ? "" : "s"} in stage`}</span>
+              <span>{days === 0 ? "Moved today" : `${days} day${days === 1 ? "" : "s"} in stage`}</span>
             </div>
             <h2>{fullName(d)}</h2>
           </div>
@@ -822,7 +822,7 @@ function Chat({ d, messages, loaded, visible }: { d: Deal; messages: Message[]; 
       <Composer
         id="composer-text"
         folder={`deal/${d.id}`}
-        placeholder={`Message about ${d.first_name}… @ to tag`}
+        placeholder="Message · @ to tag"
         mentionables={profiles
           .filter((p) => p.id !== me.id)
           .map((p) => ({ key: p.id, label: p.name, profile: p, sub: canSee(p, d) ? ROLE_TITLE[p.role] : "Can’t see this deal" }))}

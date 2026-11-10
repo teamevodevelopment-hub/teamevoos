@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePortal } from "@/components/PortalProvider";
 import { Avatar, I } from "@/components/ui";
@@ -136,16 +137,27 @@ export default function TeamPage() {
   const maxWins = Math.max(1, ...Object.values(wins));
 
   return (
-    <div className="team" onClick={() => setPickerFor(null)}>
+    <div className="team convo" onClick={() => setPickerFor(null)}>
       <section className="team-main">
-        <div className="team-online-row">
-          {sortedPeople.map((p) => (
-            <span key={p.id} className={`pres${online.includes(p.id) ? " on" : ""}`} title={`${p.name}${online.includes(p.id) ? " · online" : ""}`}>
-              <Avatar p={p} size="sm" />
-            </span>
-          ))}
-          <span className="pres-count">{online.length} online</span>
-        </div>
+        <header className="team-online-row dm-h">
+          <Link href="/chats" className="iconbtn" aria-label="Back to chats">
+            {I.back}
+          </Link>
+          <span className="chat-av room">{I.team}</span>
+          <span className="dm-who">
+            <b>Team room</b>
+            <small>
+              {online.length} online · {profiles.length} people
+            </small>
+          </span>
+          <span className="pres-stack">
+            {sortedPeople.map((p) => (
+              <span key={p.id} className={`pres${online.includes(p.id) ? " on" : ""}`} title={`${p.name}${online.includes(p.id) ? " · online" : ""}`}>
+                <Avatar p={p} size="sm" />
+              </span>
+            ))}
+          </span>
+        </header>
 
         <div
           className="tm-list"
@@ -218,7 +230,7 @@ export default function TeamPage() {
         <Composer
           id="team-text"
           folder="team"
-          placeholder="Message the team… @ to tag, # to drop in a deal"
+          placeholder="Message the team"
           mentionables={[
             ...profiles.filter((p) => p.id !== me.id).map((p) => ({ key: p.id, label: p.name, profile: p })),
             { key: "team", label: "team", sub: "Everyone" },

@@ -129,52 +129,60 @@ export function Bubble(props: {
   onActivate: () => void;
   onReply?: () => void;
   onDelete?: () => void;
-  /** Read marks shown after the time (private chats). */
+  /** Read marks shown next to the time (private chats). */
   ticks?: ReactNode;
-  /** A line under the message, e.g. "Seen by Sam, TJ". */
+  /** A line under the bubble, e.g. "Seen by Sam, TJ". */
   footer?: ReactNode;
+  /** Group chats show who said what; private chats don't need to. */
+  showNames?: boolean;
   idPrefix?: string;
 }) {
-  const { m, grouped, author, parent, reactions = [] } = props;
+  const { m, grouped, author, parent, reactions = [], mine, showNames = true } = props;
   const { me, person } = usePortal();
   const deleted = !!m.deleted_at;
   const bigEmoji = !deleted && !m.file_path && ONLY_EMOJI.test(m.body) && [...m.body.replace(/\s/g, "")].length <= 6;
   const counts = new Map<string, string[]>();
   for (const r of reactions) counts.set(r.emoji, [...(counts.get(r.emoji) ?? []), r.user_id]);
   const pre = props.idPrefix ?? "tm";
+  const meta = (
+    <span className="tm-meta">
+      {clock(m.created_at)}
+      {props.ticks}
+    </span>
+  );
 
   return (
-    <div id={`${pre}-${m.id}`} className={`tm${grouped ? " grouped" : ""}${props.active ? " active" : ""}${props.mine ? " mine" : ""}`} onClick={props.onActivate}>
-      <div className="tm-av">{!grouped && <Avatar p={author} />}</div>
-      <div className="tm-b">
-        {!grouped && (
-          <div className="tm-h">
-            <b>{author?.name ?? "Former team member"}</b>
-            <small>{clock(m.created_at)}</small>
-            {props.ticks}
-          </div>
-        )}
-        {parent && (
-          <button
-            className="tm-quote"
-            onClick={(e) => {
-              e.stopPropagation();
-              document.getElementById(`${pre}-${parent.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-            }}
-          >
-            {I.reply}
-            <b>{person(parent.author_id)?.name}</b>
-            <span>{previewText(parent)}</span>
-          </button>
-        )}
-        {!deleted && <Attachment m={m} />}
-        {(deleted || m.body) && (
-          <div className={`tm-x${bigEmoji ? " big" : ""}${deleted ? " deleted" : ""}`}>
-            {deleted ? "Message deleted" : <Body text={m.body} />}
-            {grouped && props.ticks && <span className="tm-inline-time">{props.ticks}</span>}
-          </div>
-        )}
-        {!m.body && !deleted && grouped && props.ticks && <div className="tm-x">{props.ticks}</div>}
+    <div
+      id={`${pre}-${m.id}`}
+      className={`tm${grouped ? " grouped" : ""}${props.active ? " active" : ""}${mine ? " mine" : ""}${showNames ? "" : " solo"}`}
+      onClick={props.onActivate}
+    >
+      {showNames && !mine && <div className="tm-av">{!grouped && <Avatar p={author} />}</div>}
+      <div className="tm-col">
+        <div className={`tm-bubble${bigEmoji ? " emoji" : ""}${m.file_kind === "image" && !m.body ? " photo" : ""}`}>
+          {showNames && !mine && !grouped && <b className="tm-name">{author?.name ?? "Former team member"}</b>}
+          {parent && (
+            <button
+              className="tm-quote"
+              onClick={(e) => {
+                e.stopPropagation();
+                document.getElementById(`${pre}-${parent.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }}
+            >
+              <b>{parent.author_id === me.id ? "You" : person(parent.author_id)?.name}</b>
+              <span>{previewText(parent)}</span>
+            </button>
+          )}
+          {!deleted && <Attachment m={m} />}
+          {deleted || m.body ? (
+            <div className={`tm-x${bigEmoji ? " big" : ""}${deleted ? " deleted" : ""}`}>
+              {deleted ? "Message deleted" : <Body text={m.body} />}
+              {meta}
+            </div>
+          ) : (
+            <div className="tm-x tm-x-meta">{meta}</div>
+          )}
+        </div>
         {counts.size > 0 && (
           <div className="reacts">
             {[...counts.entries()].map(([emoji, users]) => (
@@ -195,7 +203,7 @@ export function Bubble(props: {
         )}
         {props.footer}
       </div>
-      {!deleted && (props.onReact || props.onReply || props.canDelete) && (
+      {!deleted && (props.onReact || props.onReply || (props.canDelete && props.onDelete)) && (
         <div className="tm-actions" onClick={(e) => e.stopPropagation()}>
           {props.onReact &&
             QUICK.slice(0, 4).map((e) => (
