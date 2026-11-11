@@ -15,6 +15,13 @@ export type Dialog =
   | { kind: "palette" }
   | null;
 
+export interface Win {
+  kind: "closed" | "approved";
+  agentId: string | null;
+  dealId: number | null;
+  at: number;
+}
+
 interface Toast {
   id: number;
   msg: string;
@@ -58,6 +65,9 @@ interface Portal {
   setMuteTeam: (on: boolean) => Promise<void>;
   confetti: number;
   celebrate: () => void;
+  /** The latest approval or closing, shown as a celebration card. */
+  win: Win | null;
+  clearWin: () => void;
   signOut: () => Promise<void>;
 }
 
@@ -103,6 +113,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
   pathRef.current = pathname;
   const [confetti, setConfetti] = useState(0);
   const celebrate = useCallback(() => setConfetti((n) => n + 1), []);
+  const [win, setWin] = useState<Win | null>(null);
+  const clearWin = useCallback(() => setWin(null), []);
   const [unreadChats, setUnreadChats] = useState<Record<string, number>>({});
   const [updatesUnread, setUpdatesUnread] = useState(0);
   const [reads, setReads] = useState<ChatRead[]>([]);
@@ -222,10 +234,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
         const onTeam = pathRef.current === "/team";
         if (m.kind === "celebration") {
           celebrate();
-          if (!onTeam) {
-            const who = profilesRef.current.find((p) => p.id === m.author_id)?.name ?? "Someone";
-            toast(m.body === "closed" ? `🎉 ${who} just closed a deal!` : `✅ ${who}’s deal got approved!`, "ok");
-          }
+          // A card shows who won and what; it stays quiet inside the team room, where the post itself shows.
+          if (!onTeam) setWin({ kind: m.body === "closed" ? "closed" : "approved", agentId: m.author_id, dealId: m.deal_id, at: Date.now() });
         }
         if (m.author_id !== me.id) unreadSoon();
       })
@@ -446,6 +456,8 @@ export function PortalProvider({ children }: { children: React.ReactNode }) {
     setMuteTeam,
     confetti,
     celebrate,
+    win,
+    clearWin,
     signOut,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

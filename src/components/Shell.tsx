@@ -10,6 +10,7 @@ import { DealPanel } from "./DealPanel";
 import { Dialogs } from "./Dialogs";
 import { Confetti } from "./Confetti";
 import { PushBanner } from "./PushBanner";
+import { WinCard } from "./Showroom";
 
 export function useIsMobile() {
   const [m, setM] = useState(false);
@@ -279,6 +280,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <DealPanel id={openId} />
       <Dialogs />
       <Confetti fire={confetti} />
+      <WinCard />
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>

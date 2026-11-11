@@ -7,7 +7,7 @@ import { Bubble, dayLabel, isGrouped, newDay, seenBy } from "./chat/Bubble";
 import { Composer } from "./chat/Composer";
 import type { Attachment } from "@/lib/chatFiles";
 import { useIsMobile } from "./Shell";
-import { StageJourney } from "./Showroom";
+import { CarArt, StageJourney } from "./Showroom";
 import Link from "next/link";
 import { SAVED_COLUMNS, cad, type SavedCheck } from "@/lib/paystub";
 import { supabase, errText } from "@/lib/supabase/client";
@@ -865,6 +865,7 @@ function Chat({ d, messages, loaded, visible }: { d: Deal; messages: Message[]; 
         {!loaded && <div className="skel" style={{ height: 60 }} />}
         {loaded && !messages.length && (
           <div className="emptystate" style={{ padding: "32px 8px" }}>
+            <CarArt badge={I.chat} />
             <h3>No messages yet</h3>Talk about {d.first_name}’s deal here. Type @ to tag someone, or send a photo or voice note.
           </div>
         )}

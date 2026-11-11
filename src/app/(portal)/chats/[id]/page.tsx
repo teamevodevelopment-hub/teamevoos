@@ -1,5 +1,6 @@
 "use client";
 
+import { CarArt } from "@/components/Showroom";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
@@ -126,6 +127,7 @@ export default function DirectChatPage() {
           {!loaded && <div className="skel" style={{ height: 120 }} />}
           {loaded && !chat.length && (
             <div className="emptystate">
+              <CarArt badge={I.lock} />
               <h3>Private chat with {them.name}</h3>
               Only the two of you can see this. Send a message, photo, file or voice note.
             </div>

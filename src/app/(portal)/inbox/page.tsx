@@ -1,8 +1,9 @@
 "use client";
 
+import { CarArt } from "@/components/Showroom";
 import { useRouter } from "next/navigation";
 import { usePortal } from "@/components/PortalProvider";
-import { Avatar, Mentionized } from "@/components/ui";
+import { Avatar, I, Mentionized } from "@/components/ui";
 import { supabase } from "@/lib/supabase/client";
 import { when } from "@/lib/stages";
 
@@ -15,6 +16,7 @@ export default function InboxPage() {
     return (
       <div className="inbox">
         <div className="emptystate">
+          <CarArt badge={I.check} />
           <h3>You’re all caught up</h3>
           When someone @mentions you or moves one of your deals, it shows up here.
         </div>

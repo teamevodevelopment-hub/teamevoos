@@ -1,5 +1,6 @@
 "use client";
 
+import { CarArt } from "@/components/Showroom";
 import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePortal } from "@/components/PortalProvider";
@@ -170,7 +171,8 @@ export default function TeamPage() {
           {!loaded && <div className="skel" style={{ height: 120 }} />}
           {loaded && !messages.length && (
             <div className="emptystate">
-              <h3>Say hi to the team 👋</h3>
+              <CarArt badge={I.team} />
+              <h3>Say hi to the team</h3>
               Wins, questions, memes. Approvals and closed deals post here automatically, with confetti.
             </div>
           )}

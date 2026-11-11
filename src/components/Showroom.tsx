@@ -100,12 +100,15 @@ export function TodayHero() {
   const approved = open.filter((d) => d.stage === "approved" || d.stage === "car");
   const inPlay = approved.reduce((t, d) => t + (dealAmount(d) ?? 0), 0);
   const first = me.name.split(" ")[0];
+  // Chosen in the browser: the server runs on a different clock and time zone.
+  const [hi, setHi] = useState("Hello");
+  useEffect(() => setHi(greeting()), []);
 
   return (
     <section className="hero" aria-label="Today">
       <div className="hero-t">
         <span className="hero-hi">
-          {greeting()}, {first}
+          {hi}, {first}
         </span>
         <h2>
           {mine.length ? (
@@ -143,5 +146,66 @@ export function TodayHero() {
         <path d="M82 36h96" />
       </svg>
     </section>
+  );
+}
+
+/** Line-art car on a road, for empty screens. An optional badge sits on the roof (inbox, chat, check…). */
+export function CarArt({ badge, label }: { badge?: React.ReactNode; label?: string }) {
+  return (
+    <span className="carart" role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
+      <svg viewBox="0 0 220 110">
+        <path className="ca-road" d="M10 96h200" />
+        <path className="ca-road dash" d="M40 104h28M96 104h28M152 104h28" />
+        <path
+          className="ca-body"
+          d="M28 80c0-8 5-13 13-15l26-6 22-19c6-5 13-8 21-8h30c9 0 16 3 22 9l17 18 15 3c8 2 13 8 13 16v6c0 3-2 5-5 5h-11M62 89H33c-3 0-5-2-5-5v-4M90 89h52"
+        />
+        <path className="ca-win" d="M95 58l16-15c3-3 7-4 11-4h12v19zM144 58V39h4c4 0 8 2 11 5l14 14z" />
+        <circle className="ca-wheel" cx="76" cy="89" r="13" />
+        <circle className="ca-wheel" cx="76" cy="89" r="4" />
+        <circle className="ca-wheel" cx="157" cy="89" r="13" />
+        <circle className="ca-wheel" cx="157" cy="89" r="4" />
+        <path className="ca-light" d="M186 72h8" />
+      </svg>
+      {badge && <span className="ca-badge">{badge}</span>}
+    </span>
+  );
+}
+
+/** "Deal closed!" or "Approved!" card that rises from the bottom with the confetti, then leaves by itself. */
+export function WinCard() {
+  const { win, clearWin, deals, person } = usePortal();
+  const [shown, setShown] = useState(win);
+
+  useEffect(() => {
+    if (!win) return;
+    setShown(win);
+    const t = setTimeout(clearWin, 6500);
+    return () => clearTimeout(t);
+  }, [win, clearWin]);
+
+  if (!win || !shown) return null;
+  const d = shown.dealId ? deals.find((x) => x.id === shown.dealId) : undefined;
+  const who = person(shown.agentId)?.name ?? "Someone";
+  const closed = shown.kind === "closed";
+  const amount = d ? dealAmount(d) : null;
+  const car = d && [d.vehicle_year, d.vehicle_make, d.vehicle_model].filter(Boolean).join(" ");
+
+  return (
+    <div className={`win ${shown.kind}`} role="status" aria-live="polite" key={shown.at}>
+      <span className="win-ic">{closed ? I.trophy : I.check}</span>
+      <div className="win-t">
+        <small>{closed ? "Deal closed" : "Approved by a lender"}</small>
+        <b>{d ? `${d.first_name} ${d.last_name}` : `${who}’s deal`}</b>
+        <span>
+          {[car, amount ? moneyShort(amount) : ""].filter(Boolean).join(" · ") || (closed ? "Keys in hand." : "On to car selection.")}
+          {" · "}
+          {closed ? `Nice work, ${who}!` : `${who}’s customer`}
+        </span>
+      </div>
+      <button className="iconbtn" onClick={clearWin} aria-label="Close">
+        {I.close}
+      </button>
+    </div>
   );
 }

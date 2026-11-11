@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { supabase, errText } from "@/lib/supabase/client";
+import { CarArt } from "@/components/Showroom";
+import { I } from "@/components/ui";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -23,12 +25,26 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="auth">
+    <main className="auth showroom-auth">
+      <section className="auth-hero" aria-label="easyAuto Deal Portal">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="auth-hero-logo" src="/brand/logo-dark.png" alt="easyAuto" width={190} height={60} />
+        <h2>From first call to keys in hand.</h2>
+        <p>Deals, approvals, chats and pay stubs for the easyAuto team, in one place.</p>
+        <ul>
+          <li>
+            {I.board}Every deal, every stage, at a glance
+          </li>
+          <li>
+            {I.bell}Approvals and mentions on your lock screen
+          </li>
+          <li>
+            {I.stub}Pay stubs checked in seconds
+          </li>
+        </ul>
+        <CarArt />
+      </section>
       <form className="authcard" onSubmit={submit}>
-        <picture className="auth-logo">
-          <source srcSet="/brand/logo-full-dark.png" media="(prefers-color-scheme: dark)" />
-          <img src="/brand/logo-full.png" alt="easyAuto · Car financing · Car dealer" width={300} height={107} />
-        </picture>
         <div>
           <h1>Sign in</h1>
           <p>Use the email TJ set up for you.</p>
@@ -41,8 +57,14 @@ export default function LoginPage() {
           <label htmlFor="password">Password</label>
           <input className="input" id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
-        {error && <p className="err" role="alert">{error}</p>}
-        <button className="btn primary" disabled={busy}>{busy ? "Signing in…" : "Continue"}</button>
+        {error && (
+          <p className="err" role="alert">
+            {error}
+          </p>
+        )}
+        <button className="btn primary" disabled={busy}>
+          {busy ? "Signing in…" : "Continue"}
+        </button>
       </form>
     </main>
   );

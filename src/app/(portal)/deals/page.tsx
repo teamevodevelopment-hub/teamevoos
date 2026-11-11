@@ -6,7 +6,7 @@ import { useIsMobile } from "@/components/Shell";
 import { Avatar, Chip, I } from "@/components/ui";
 import { STAGE, STAGES, approvalLine, bestApproval, daysSince, dealAmount, fullName, isLate, lateText, moneyShort, targets, vehicleLine, yourMove } from "@/lib/stages";
 import { Stats } from "./Stats";
-import { TodayHero } from "@/components/Showroom";
+import { CarArt, TodayHero } from "@/components/Showroom";
 import type { Deal, StageId } from "@/lib/types";
 
 function subline(d: Deal) {
@@ -65,9 +65,11 @@ function Card({ d, draggable }: { d: Deal; draggable: boolean }) {
   const conds = d.deal_conditions ?? [];
   const condsDone = conds.filter((c) => c.done_at).length;
   const amount = dealAmount(d);
+  // Approved or closed in the last day: the card glows green for a moment.
+  const fresh = (d.stage === "approved" || d.stage === "closed") && Date.now() - new Date(d.stage_changed_at).getTime() < 86_400_000;
   return (
     <article
-      className={`card${flash === d.id ? " flash" : ""}${isLate(d) && yourMove(d.stage, me.role) ? " is-late" : ""}`}
+      className={`card${flash === d.id ? " flash" : ""}${isLate(d) && yourMove(d.stage, me.role) ? " is-late" : ""}${fresh ? " fresh" : ""}`}
       style={{ ["--c" as string]: `var(${STAGE[d.stage].color})` }}
       tabIndex={0}
       data-id={d.id}
@@ -141,6 +143,7 @@ export default function DealsPage() {
   if (!deals.length)
     return (
       <div className="emptystate">
+        <CarArt badge={I.plus} />
         <h3>No deals yet</h3>
         Add your first customer with New deal. They’ll show up here as soon as they’re saved.
       </div>
@@ -361,7 +364,7 @@ function PhoneDeals({ start }: { start: StageId }) {
                   list.map((d) => <Card key={d.id} d={d} draggable={false} />)
                 ) : (
                   <div className="emptystate mini">
-                    {I.car}
+                    <CarArt />
                     <h3>Nothing here</h3>No deals in {s.name} right now.
                   </div>
                 )}
