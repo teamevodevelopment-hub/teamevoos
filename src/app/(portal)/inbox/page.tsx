@@ -55,11 +55,11 @@ export default function InboxPage() {
                 <span className="deal">
                   {!n.deal_id ? "Team chat" : n.deals ? `${n.deals.first_name} ${n.deals.last_name}` : "a deal you can no longer see"}
                 </span>
-                <span className="when">{when(n.created_at)}</span>
               </div>
               <div className="q">
                 <Mentionized text={n.body.replace(/#\[deal:\d+\]/g, "a deal")} names={names} />
               </div>
+              <span className="when">{when(n.created_at)}</span>
             </div>
           </button>
         ))}

@@ -132,6 +132,12 @@ export const I: Record<string, ReactNode> = {
       <path d="M13.5 16.5l1.6 1.6 3-3.2" strokeWidth={2} />
     </svg>
   ),
+  refresh: (
+    <svg viewBox="0 0 24 24" {...s} strokeWidth={2}>
+      <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+      <path d="M20 4v7h-7" />
+    </svg>
+  ),
   copy: (
     <svg viewBox="0 0 24 24" {...s}>
       <rect x="8" y="8" width="12" height="12" rx="2" />

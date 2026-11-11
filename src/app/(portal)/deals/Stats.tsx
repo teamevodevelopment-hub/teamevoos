@@ -1,6 +1,7 @@
 "use client";
 
 import { usePortal } from "@/components/PortalProvider";
+import { CountUp } from "@/components/Showroom";
 import { dealAmount, moneyShort } from "@/lib/stages";
 import type { Deal } from "@/lib/types";
 
@@ -66,7 +67,9 @@ function Stat({ label, value, sub, tone }: { label: string; value: string; sub: 
   return (
     <div className={`stat${tone ? ` ${tone}` : ""}`}>
       <span className="stat-l">{label}</span>
-      <b className="stat-v tnum">{value}</b>
+      <b className="stat-v tnum">
+        <CountUp text={value} />
+      </b>
       <span className="stat-s">{sub}</span>
     </div>
   );

@@ -71,6 +71,9 @@ export default function PaystubPage() {
   }, []);
   useEffect(() => {
     loadHistory();
+    // Pull-to-refresh on a phone reloads the history too.
+    window.addEventListener("app:refresh", loadHistory);
+    return () => window.removeEventListener("app:refresh", loadHistory);
   }, [loadHistory]);
 
   useEffect(() => {

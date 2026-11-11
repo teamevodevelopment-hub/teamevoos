@@ -4,6 +4,7 @@ import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/instrument-sans";
 import "@fontsource/jetbrains-mono/500.css";
 import "./globals.css";
+import "./showroom.css";
 
 // Every page depends on who is signed in, so nothing is pre-rendered at build time.
 export const dynamic = "force-dynamic";

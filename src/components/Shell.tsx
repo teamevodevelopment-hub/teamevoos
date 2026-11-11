@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePortal, isOpen } from "./PortalProvider";
 import { Avatar, I } from "./ui";
 import { ROLE_TITLE } from "@/lib/stages";
@@ -42,6 +42,39 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/paystub", label: "Paystub verifier", short: "Paystub", icon: I.stub },
     ...(me.role === "admin" ? [{ href: "/settings", label: "Settings", icon: I.gear }] : []),
   ];
+
+  // Pull down on a list (phone) to refresh it.
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStart = useRef<{ x: number; y: number } | null>(null);
+  const PULL_AT = 72;
+  const onPullStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const v = e.currentTarget;
+    if (refreshing || v.scrollTop > 0 || v.querySelector(".convo, .team")) return;
+    pullStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onPullMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const s = pullStart.current;
+    if (!s) return;
+    const dy = e.touches[0].clientY - s.y;
+    const dx = Math.abs(e.touches[0].clientX - s.x);
+    if (dy <= 0 || dx > dy) {
+      setPull(0);
+      if (dx > 12) pullStart.current = null;
+      return;
+    }
+    setPull(Math.min(110, dy * 0.5));
+  };
+  const onPullEnd = async () => {
+    const went = pull;
+    pullStart.current = null;
+    setPull(0);
+    if (went < PULL_AT * 0.7) return;
+    setRefreshing(true);
+    window.dispatchEvent(new Event("app:refresh"));
+    await Promise.all([p.refreshDeals(), p.refreshNotifications()]).catch(() => {});
+    setTimeout(() => setRefreshing(false), 400);
+  };
 
   const here = (n: { href: string; match?: string[] }) => (n.match ?? [n.href]).some((m) => pathname === m || pathname.startsWith(m + "/"));
   const dmWith = pathname.startsWith("/chats/") ? person(pathname.slice(7)) : undefined;
@@ -114,7 +147,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Link key={n.href} href={n.href} className="nav" aria-current={here(n) ? "page" : undefined}>
               {n.icon}
               {n.label}
-              {n.count ? <span className="count">{n.count}</span> : null}
+              {n.count ? (
+                <span className="count" key={n.count}>
+                  {n.count}
+                </span>
+              ) : null}
             </Link>
           ))}
           <div className="grow" />
@@ -165,8 +202,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </Link>
             </span>
           </header>
-          <PushBanner />
-          <div className="view">{children}</div>
+          {/* The notifications ask lives on Deals only, so it doesn't follow you around. */}
+          {pathname === "/deals" && <PushBanner />}
+          {/* Keyed by screen so each one fades up into place. */}
+          <div className="ptr" aria-hidden style={{ height: refreshing ? 44 : pull, opacity: refreshing || pull > 8 ? 1 : 0 }}>
+            <span className={`ptr-ic${refreshing ? " spin-on" : ""}`} style={{ transform: refreshing ? undefined : `rotate(${pull * 4}deg)` }}>
+              {I.refresh}
+            </span>
+          </div>
+          <div className="view" key={pathname} onTouchStart={onPullStart} onTouchMove={onPullMove} onTouchEnd={onPullEnd}>
+            {children}
+          </div>
         </main>
       </div>
 
@@ -182,7 +228,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <Link key={n.href} href={n.href} className="tab" aria-current={here(n) ? "page" : undefined}>
                 {n.icon}
                 {"short" in n && n.short ? n.short : n.label}
-                {"count" in n && n.count ? <span className="count">{n.count}</span> : null}
+                {"count" in n && n.count ? (
+                  <span className="count" key={n.count}>
+                    {n.count}
+                  </span>
+                ) : null}
               </Link>
             ),
           )}

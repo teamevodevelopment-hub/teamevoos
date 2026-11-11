@@ -1,0 +1,212 @@
+/* ───────────────────────── Showroom ─────────────────────────
+   The redesign layer: shared tokens, motion, the Today header, richer deal cards,
+   the phone stage pager, the floating tab bar, and the deal screen as a sheet.
+   Loaded after globals.css, so these rules win where they overlap. */
+
+:root{
+  /* Spacing on a 4/8 rhythm */
+  --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:20px;--sp-6:24px;--sp-8:32px;
+  /* Corners */
+  --r-sm:8px;--r-md:12px;--r-lg:16px;--r-xl:22px;
+  /* Motion: quick for small things, a little longer for things that travel */
+  --dur-1:120ms;--dur-2:200ms;--dur-3:320ms;
+  --ease:cubic-bezier(.2,.8,.2,1);--ease-spring:cubic-bezier(.34,1.56,.64,1);
+  /* The signature: the logo's navy into its blue */
+  --grad-brand:linear-gradient(135deg,#0B1D3A 0%,#10305F 55%,#134A94 100%);
+  --money:#0E7A55;
+  --elev-1:0 1px 2px rgba(11,29,58,.06),0 2px 8px rgba(11,29,58,.05);
+  --elev-2:0 2px 6px rgba(11,29,58,.08),0 12px 28px rgba(11,29,58,.10);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --grad-brand:linear-gradient(135deg,#0A1730 0%,#0F2A55 55%,#1A4F96 100%);
+  --money:#46C995;
+  --elev-1:0 1px 2px rgba(0,0,0,.4);--elev-2:0 12px 32px rgba(0,0,0,.45);
+}}
+:root[data-theme="dark"]{--grad-brand:linear-gradient(135deg,#0A1730 0%,#0F2A55 55%,#1A4F96 100%);--money:#46C995;--elev-1:0 1px 2px rgba(0,0,0,.4);--elev-2:0 12px 32px rgba(0,0,0,.45)}
+
+/* Focus: a clear brand-blue ring, only for keyboard users */
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+
+/* Screens fade up into place when you switch tabs */
+@keyframes enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.view>*{animation:enter var(--dur-3) var(--ease) both}
+
+/* Buttons and tappable things give feedback the moment they're pressed */
+.btn,.iconbtn,.mstage,.tab,.nav,.chatrow,.ib,.stub-hist button{transition:background var(--dur-1),border-color var(--dur-1),color var(--dur-1),transform var(--dur-1) var(--ease),box-shadow var(--dur-2)}
+.btn:active,.iconbtn:active,.mstage:active,.tab:active,.chatrow:active,.ib:active,.stub-hist button:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 1px 2px rgba(11,29,58,.2)}
+
+/* ── Today header ── */
+.hero{position:relative;overflow:hidden;display:flex;align-items:flex-end;gap:var(--sp-6);padding:20px 22px;margin-bottom:14px;border-radius:var(--r-lg);background:var(--grad-brand);color:#fff;box-shadow:var(--elev-2);isolation:isolate}
+.hero::after{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(120% 140% at 100% 0%,rgba(110,168,238,.35),transparent 55%)}
+.hero-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.hero-hi{font-size:13px;font-weight:600;color:rgba(255,255,255,.72)}
+.hero h2{margin:0;font-family:var(--font-display);font-size:26px;line-height:1.15;letter-spacing:-.02em;text-wrap:balance}
+.hero-s{font-size:13px;color:rgba(255,255,255,.78)}
+.hero-late{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#FFD48A}
+.hero-late svg{width:15px;height:15px}
+.hero-money{display:flex;flex-direction:column;align-items:flex-end;text-align:right;gap:2px;padding-left:var(--sp-6);border-left:1px solid rgba(255,255,255,.16)}
+.hero-money small{font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.hero-money b{font-family:var(--font-display);font-size:32px;line-height:1.1;letter-spacing:-.02em}
+.hero-money>span{font-size:12.5px;color:rgba(255,255,255,.72)}
+.hero-art{position:absolute;right:18%;bottom:-18px;width:260px;height:auto;z-index:-1;fill:none;stroke:rgba(255,255,255,.09);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ── Numbers row ── */
+.stat{border-radius:var(--r-md);box-shadow:var(--elev-1);transition:transform var(--dur-2) var(--ease),box-shadow var(--dur-2)}
+.stat-v{font-size:26px}
+.stat.good .stat-v{color:var(--money)}
+
+/* ── Deal cards ── */
+.card{position:relative;border-radius:var(--r-md);box-shadow:var(--elev-1),inset 3px 0 0 var(--c,var(--line-2));padding-left:14px;transition:border-color var(--dur-1),box-shadow var(--dur-2),transform var(--dur-2) var(--ease)}
+.card:hover{transform:translateY(-1px);box-shadow:var(--elev-2),inset 3px 0 0 var(--c,var(--line-2))}
+.card:active{transform:scale(.985)}
+.card.is-late{box-shadow:var(--elev-1),inset 3px 0 0 var(--warn)}
+.card-t{gap:8px}
+.card-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-t .dot{margin-left:0}
+.card-amt{margin-left:auto;font-weight:700;font-size:13px;color:var(--money);flex:none}
+.ldots{gap:3px!important}
+.ldots i{width:7px;height:7px;border-radius:50%;background:var(--fg-3);opacity:.55}
+.ldots i.approved{background:var(--good);opacity:1}
+.ldots i.declined{background:var(--bad);opacity:1}
+
+/* Inbox: time in the top corner on a computer */
+.ib{position:relative}
+.ib .when{position:absolute;top:15px;right:16px;margin:0}
+.ib .l1{padding-right:140px}
+
+/* ── Board columns (computer) ── */
+.col{border-radius:var(--r-md);border-top:3px solid var(--c,var(--line-2))}
+.col-h .colsum{margin-left:auto;color:var(--fg-2)}
+.col-h .yourmove{margin-left:0}
+.col-h .colsum+.yourmove{margin-left:0}
+
+/* Empty stage on a phone */
+.emptystate.mini{padding:36px 16px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.emptystate.mini svg{width:40px;height:40px;color:var(--line-2);margin-bottom:6px}
+
+/* ── Notifications strip (was a big card) ── */
+.pushbanner{padding:8px 8px 8px 12px;gap:10px;box-shadow:none;border-radius:var(--r-md);background:var(--brand-soft);border-color:transparent}
+.pushbanner .pb-ic{width:28px;height:28px;background:var(--surface)}
+.pushbanner .pb-t{font-size:13px}
+.pushbanner .pb-t span{color:var(--fg-2)}
+.pushbanner .btn{padding:6px 12px}
+
+/* Pull to refresh */
+.ptr{display:none}
+@media (max-width:860px){
+  .ptr{display:grid;place-items:center;overflow:hidden;flex:none;transition:height var(--dur-2) var(--ease),opacity var(--dur-1)}
+  .ptr-ic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--surface);box-shadow:var(--elev-1);color:var(--brand)}
+  .ptr-ic svg{width:16px;height:16px}
+  .ptr-ic.spin-on{animation:spin .8s linear infinite}
+}
+
+/* The sheet's grab handle only shows on a phone */
+.p-grab{display:none}
+
+/* ── Stage journey (deal screen) ── */
+.journey{max-width:640px;list-style:none;margin:2px 0 0;padding:0;display:flex;align-items:flex-start;gap:0;counter-reset:j}
+.journey li{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0}
+.journey li::before{content:"";position:absolute;top:9px;right:50%;width:100%;height:2px;background:var(--line);z-index:0}
+.journey li:first-child::before{display:none}
+.journey li.done::before,.journey li.now::before,.journey li.stop::before{background:color-mix(in srgb,var(--brand) 70%,var(--line))}
+.j-dot{position:relative;z-index:1;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:2px solid var(--line-2);color:#fff}
+.j-dot svg{width:12px;height:12px}
+.journey li.done .j-dot{background:var(--brand);border-color:var(--brand)}
+.journey li.now .j-dot{border-color:var(--c);background:var(--surface);box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 22%,transparent)}
+.journey li.now .j-dot::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+.journey li.stop .j-dot{background:var(--bad);border-color:var(--bad)}
+.j-l{font-size:11px;font-weight:600;color:var(--fg-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.journey li.now .j-l,.journey li.stop .j-l{color:var(--fg)}
+@media (prefers-reduced-motion:no-preference){.journey li.now .j-dot{animation:jpulse 2.4s var(--ease) infinite}}
+@keyframes jpulse{0%,100%{box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 22%,transparent)}50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--c) 8%,transparent)}}
+
+/* Badges pop when the number changes */
+@keyframes pop{0%{transform:scale(.4)}100%{transform:scale(1)}}
+.nav .count,.tab .count{animation:pop var(--dur-3) var(--ease-spring)}
+
+/* ── Phone ── */
+@media (max-width:860px){
+  .view{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))}
+
+  /* Today header */
+  .hero{flex-direction:column;align-items:stretch;gap:14px;padding:18px 18px 16px;margin-bottom:12px}
+  .hero h2{font-size:23px}
+  .hero-money{flex-direction:row;align-items:baseline;justify-content:space-between;flex-wrap:wrap;text-align:left;padding:12px 0 0;border-left:0;border-top:1px solid rgba(255,255,255,.16);column-gap:10px}
+  .hero-money small{flex-basis:100%}
+  .hero-money b{font-size:28px}
+  .hero-art{right:-30px;bottom:auto;top:6px;width:200px}
+
+  /* Numbers: a swipeable row that snaps card by card */
+  .stats{scroll-snap-type:x mandatory;scroll-padding:0 16px;margin-bottom:14px}
+  .stat{flex:0 0 46%;scroll-snap-align:start}
+  .stat-v{font-size:23px}
+
+  /* Stage strip: each pill shows the stage, its count and its money */
+  .mstages{gap:8px;padding:2px 16px 8px;margin:0 -16px;scroll-padding:0 16px}
+  .mstage{flex-direction:column;align-items:flex-start;gap:1px;padding:8px 14px 8px 12px;border-radius:var(--r-md);min-height:52px;box-shadow:var(--elev-1)}
+  .ms-name{display:inline-flex;align-items:center;gap:6px;font-size:13px}
+  .ms-name::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c)}
+  .ms-meta{display:flex;gap:6px;align-items:baseline;font-size:12px;color:var(--fg-3);font-weight:600;padding-left:13px}
+  .ms-meta .n{color:var(--fg);font-size:13px}
+  .mstage[aria-selected="true"]{background:var(--grad-brand);border-color:transparent;color:#fff;box-shadow:var(--elev-2)}
+  .mstage[aria-selected="true"] .ms-meta,.mstage[aria-selected="true"] .ms-meta .n{color:rgba(255,255,255,.82)}
+  .mstage[aria-selected="true"] .ms-name::before{box-shadow:0 0 0 2px rgba(255,255,255,.6)}
+  .mtrack{height:3px;border-radius:3px;background:var(--line);margin:2px 0 12px;overflow:hidden}
+  .mtrack i{display:block;height:100%;border-radius:3px;background:var(--grad-brand);transition:width var(--dur-3) var(--ease)}
+
+  /* Stage pages: swipe sideways, each one snaps into place */
+  .mpager{display:flex;align-items:flex-start;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;margin:0 -16px;scrollbar-width:none;overscroll-behavior-x:contain}
+  .mpager::-webkit-scrollbar{display:none}
+  .mpage{flex:0 0 100%;min-width:0;padding:0 16px;scroll-snap-align:start;scroll-snap-stop:always}
+  .mlist{gap:10px}
+  .card{padding:14px 14px 13px 17px}
+  .card-t{font-size:15.5px}
+
+  /* Floating glass tab bar */
+  .tabbar{left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));padding:6px;border-radius:var(--r-xl);border:1px solid color-mix(in srgb,var(--line) 70%,transparent);background:color-mix(in srgb,var(--surface) 78%,transparent);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);box-shadow:0 10px 30px rgba(11,29,58,.16),0 1px 0 rgba(255,255,255,.5) inset}
+  .tab{border-radius:16px;padding:7px 0 6px;gap:3px;min-height:52px;justify-content:center}
+  .tab[aria-current="page"]:not(.new)::before{display:none}
+  .tab[aria-current="page"]:not(.new){background:var(--accent-soft);color:var(--accent)}
+  .tab.new .plus{width:46px;height:30px;border-radius:12px;color:#fff;background:var(--grad-brand);box-shadow:0 4px 12px rgba(19,74,148,.35)}
+  .tab .count{top:3px}
+
+  /* Notifications strip: one line, button on the right */
+  .pushbanner{display:flex;align-items:center;margin:10px 16px 0}
+  .pushbanner.off .pb-t span{display:none}
+  .pushbanner .pb-t{flex:1}
+  .pushbanner .btn{grid-column:auto;min-height:36px;flex:none;padding:6px 14px}
+  .pushbanner .iconbtn{width:36px;height:36px;margin:0}
+
+  /* Inbox: the time sits under the message, so it never covers a name */
+  .ib .when{position:static;display:block;margin-top:4px;font-size:12px}
+  .ib .l1{padding-right:0}
+
+  /* ── Deal screen as a sheet ── */
+  .panel{top:max(8px,env(safe-area-inset-top,0px));border-radius:var(--r-xl) var(--r-xl) 0 0;padding-top:0;transition:transform var(--dur-3) var(--ease)}
+  .panel.dragging{transition:none}
+  .p-grab{display:block;width:40px;height:5px;border-radius:3px;background:var(--line-2);margin:8px auto 0;flex:none}
+  .p-head{gap:10px;padding-top:6px}
+  .p-row h2{font-size:23px}
+  .journey{margin:4px -4px 0}
+  .j-l{font-size:10px}
+  /* Actions sit at the bottom, where your thumb is */
+  .p-actions{position:fixed;left:0;right:0;bottom:0;z-index:3;padding:10px max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line)}
+  .p-actions .btn{min-height:48px;font-size:15px;border-radius:14px}
+  .panel:has(.p-body[data-tab="chat"]) .p-actions{display:none}
+  .p-details{background:var(--bg);padding-bottom:calc(96px + env(safe-area-inset-bottom,0px));gap:14px}
+  /* Grouped cards, like iPhone Settings */
+  .p-details .sec{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px}
+  .p-details .sec h4{margin-bottom:6px}
+  /* Fields read as clean rows; tap one to edit it */
+  .p-details dl.kv{grid-template-columns:minmax(92px,36%) minmax(0,1fr);gap:0}
+  .p-details dl.kv dt,.p-details dl.kv dd{margin:0;padding:11px 0;border-bottom:1px solid var(--line);display:flex;align-items:center;min-height:46px}
+  .p-details dl.kv dt{font-size:14px;font-weight:500;color:var(--fg-3)}
+  .p-details dl.kv dt:nth-last-child(2),.p-details dl.kv dd:last-child{border-bottom:0}
+  .p-details dl.kv dd{font-size:16px}
+  .p-details .edit{margin:-8px -10px;width:calc(100% + 20px);padding:8px 10px;background:transparent;border-color:transparent;border-radius:10px;font-size:16px}
+  .p-details .edit:focus{background:var(--bg);border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+  .p-details textarea.edit{min-height:44px}
+}
+
+@media (prefers-reduced-motion:reduce){.view>*{animation:none}}

@@ -33,7 +33,7 @@ export function PushBanner() {
   };
 
   return (
-    <div className="pushbanner" role="region" aria-label="Notifications">
+    <div className={`pushbanner ${state}`} role="region" aria-label="Notifications">
       <span className="pb-ic">{I.bell}</span>
       <div className="pb-t">
         {state === "needs-install" ? (

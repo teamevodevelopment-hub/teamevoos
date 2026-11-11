@@ -7,6 +7,7 @@ import { Bubble, dayLabel, isGrouped, newDay, seenBy } from "./chat/Bubble";
 import { Composer } from "./chat/Composer";
 import type { Attachment } from "@/lib/chatFiles";
 import { useIsMobile } from "./Shell";
+import { StageJourney } from "./Showroom";
 import Link from "next/link";
 import { SAVED_COLUMNS, cad, type SavedCheck } from "@/lib/paystub";
 import { supabase, errText } from "@/lib/supabase/client";
@@ -38,9 +39,37 @@ export function DealPanel({ id }: { id: number | null }) {
   const deal = id ? deals.find((d) => d.id === id) : undefined;
   const ref = useRef<HTMLElement>(null);
   useFocusTrap(ref, !!id);
+  const isMobile = useIsMobile();
+  // On a phone the deal is a sheet: drag it down by the handle or the header to close it.
+  const drag = useRef<{ y: number; dy: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.target as HTMLElement;
+    if (!isMobile || !t.closest(".p-grab, .p-row") || t.closest("button, input, select, textarea, a")) return;
+    drag.current = { y: e.touches[0].clientY, dy: 0 };
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const d = drag.current;
+    const el = ref.current;
+    if (!d || !el) return;
+    d.dy = Math.max(0, e.touches[0].clientY - d.y);
+    el.classList.add("dragging");
+    el.style.transform = `translateY(${d.dy}px)`;
+  };
+  const onTouchEnd = () => {
+    const d = drag.current;
+    const el = ref.current;
+    drag.current = null;
+    if (!d || !el) return;
+    el.classList.remove("dragging");
+    el.style.transform = "";
+    if (d.dy > 110) closeDeal();
+  };
   return (
     <aside
       ref={ref}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
       className={`panel${id ? " on" : ""}`}
       role="dialog"
       aria-modal={id ? true : undefined}
@@ -48,6 +77,7 @@ export function DealPanel({ id }: { id: number | null }) {
       aria-hidden={!id}
       tabIndex={-1}
     >
+      <span className="p-grab" aria-hidden />
       {id && deal && <DealView key={deal.id} d={deal} />}
       {id && !deal && (
         <div className="p-head">
@@ -166,6 +196,7 @@ function DealView({ d }: { d: Deal }) {
             {I.close}
           </button>
         </div>
+        <StageJourney d={d} />
         <div className="p-actions">
           {ts.length ? (
             ts.map((t) => (
