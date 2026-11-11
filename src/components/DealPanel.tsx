@@ -7,6 +7,8 @@ import { Bubble, dayLabel, isGrouped, newDay, seenBy } from "./chat/Bubble";
 import { Composer } from "./chat/Composer";
 import type { Attachment } from "@/lib/chatFiles";
 import { useIsMobile } from "./Shell";
+import Link from "next/link";
+import { SAVED_COLUMNS, cad, type SavedCheck } from "@/lib/paystub";
 import { supabase, errText } from "@/lib/supabase/client";
 import { useFocusTrap } from "@/lib/useFocusTrap";
 import {
@@ -292,6 +294,8 @@ function DealView({ d }: { d: Deal }) {
 
           {showConditions && <Conditions d={d} />}
 
+          <PaystubChecks d={d} />
+
           {showVehicle && (
             <div className="sec">
               <h4>
@@ -575,6 +579,50 @@ function LenderRow({ l, editable }: { l: LenderSubmission; editable: boolean }) 
 }
 
 /** What the lender needs before funding. Anyone on the deal ticks items off; each tick records who and when. */
+/** Paystub checks attached to this deal, and a shortcut to run one for it. */
+function PaystubChecks({ d }: { d: Deal }) {
+  const { person } = usePortal();
+  const [list, setList] = useState<SavedCheck[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    supabase()
+      .from("paystub_checks")
+      .select(SAVED_COLUMNS)
+      .eq("deal_id", d.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => alive && setList((data ?? []) as SavedCheck[]));
+    return () => {
+      alive = false;
+    };
+  }, [d.id]);
+
+  return (
+    <div className="sec">
+      <h4>
+        Paystub checks
+        <Link className="r stub-run" href={`/paystub?for=${d.id}`}>
+          {I.stub}Check a pay stub
+        </Link>
+      </h4>
+      {list && !list.length && <p className="muted-s">None yet. Run one and it&rsquo;s attached here.</p>}
+      {list?.map((c) => (
+        <Link key={c.id} href={`/paystub?id=${c.id}`} className="pc-row">
+          <span>
+            <b>{c.employee_name || "Name not shown"}</b>
+            <small>
+              {c.stub_count} stub{c.stub_count === 1 ? "" : "s"} · by {person(c.created_by)?.name ?? "someone"} · {when(c.created_at)}
+            </small>
+          </span>
+          <span className="pc-r">
+            <b>{c.annual40 != null ? `${cad(c.annual40, false)}/yr` : "—"}</b>
+            <span className={`stub-badge ${c.warn_count ? "warn" : "ok"}`}>{c.warn_count ? `${c.warn_count} to check` : "OK"}</span>
+          </span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
 function Conditions({ d }: { d: Deal }) {
   const { me, person, toast, refreshDeals } = usePortal();
   const [text, setText] = useState("");

@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/20261110000000_init.sql", import.meta.url), "utf8");
-const laterMigrations = ["20261110000001_remove_2fa.sql", "20261110000002_team_chat.sql", "20261110000003_auto_finance.sql", "20261110000004_chat_and_push.sql"].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
+const laterMigrations = ["20261110000001_remove_2fa.sql", "20261110000002_team_chat.sql", "20261110000003_auto_finance.sql", "20261110000004_chat_and_push.sql", "20261110000005_paystub_checks.sql"].map((f) => readFileSync(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
 const db = new PGlite();
 
 await db.exec(`
@@ -418,6 +418,36 @@ await ok("A failed push never blocks the message", async () => {
     await db.exec("alter function net.http_post_off(text, jsonb, jsonb) rename to http_post");
   }
 });
+
+console.log("\nPaystub checks");
+const saveCheck = async (who, name) =>
+  (await as(who, "insert into public.paystub_checks (employee_name, stub_count, annual40, report) values ($1, 2, 74022, '{\"stubs\":[]}') returning id", [name])).rows[0].id;
+let pc;
+await ok("Ahmed saves a paystub check", async () => (pc = await saveCheck("Ahmed", "John Iyoha")));
+await ok("Corbin saves his own", async () => saveCheck("Corbin", "Jane Doe"));
+await ok("Ahmed sees only his own checks", async () => eq((await as("Ahmed", "select employee_name from public.paystub_checks")).rows.map((r) => r.employee_name), ["John Iyoha"], "names"));
+await ok("TJ sees every check", async () => eq((await as("TJ", "select count(*)::int n from public.paystub_checks")).rows[0].n, 2, "count"));
+await ok("Sam sees every check", async () => eq((await as("Sam", "select count(*)::int n from public.paystub_checks")).rows[0].n, 2, "count"));
+await denied("Can't save a check in someone else's name", () =>
+  as("Corbin", "insert into public.paystub_checks (created_by, stub_count, report) values ($1, 1, '{}')", [U.Ahmed]));
+await denied("Can't edit a saved check", async () => {
+  const r = await as("Ahmed", "update public.paystub_checks set annual40 = 99999 where id = $1 returning id", [pc]);
+  if (!r.rows.length) throw new Error("no rows changed");
+});
+await denied("Ahmed can't attach his check to Corbin's deal", () => as("Ahmed", "select public.set_paystub_deal($1, $2)", [pc, c1]), "deal you can see");
+await denied("Corbin can't attach Ahmed's check", () => as("Corbin", "select public.set_paystub_deal($1, $2)", [pc, c1]), "your own");
+await ok("Ahmed attaches it to his own deal, and the deal history says so", async () => {
+  const mine = await newDeal("Ahmed");
+  await as("Ahmed", "select public.set_paystub_deal($1, $2)", [pc, mine]);
+  const h = await db.query("select body from public.deal_events where deal_id = $1 order by id desc limit 1", [mine]);
+  if (!/attached a paystub check for John Iyoha \(\$74,022\/yr/.test(h.rows[0].body)) throw new Error(h.rows[0].body);
+});
+await ok("Corbin still can't see Ahmed's check", async () => eq((await as("Corbin", "select count(*)::int n from public.paystub_checks where id = $1", [pc])).rows[0].n, 0, "count"));
+await denied("Corbin can't delete Ahmed's check", async () => {
+  const r = await as("Corbin", "delete from public.paystub_checks where id = $1 returning id", [pc]);
+  if (!r.rows.length) throw new Error("nothing deleted");
+});
+await ok("TJ can delete any check", async () => eq((await as("TJ", "delete from public.paystub_checks where id = $1 returning id", [pc])).rows.length, 1, "deleted"));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -237,7 +237,16 @@ export function PaystubResult({ a, onCopy, onReset, embedded }: { a: Analysis; o
           <Row k="Pay period" v={r.period_start || r.period_end ? `${fmtDate(r.period_start)} – ${fmtDate(r.period_end)}` : "—"} />
           <Row k="Hours" v={r.hours_this_period != null ? `${r.hours_this_period}` : "—"} />
           <Row k="Gross pay" v={cad(r.gross_pay)} />
-          <Row k="Deductions" v={cad(r.total_deductions)} />
+          <Row
+            k="Deductions"
+            v={
+              r.total_deductions != null
+                ? cad(r.total_deductions)
+                : r.deductions.some((d) => d.amount != null)
+                  ? `${cad(r.deductions.reduce((t, d) => t + (d.amount ?? 0), 0))} (added up)`
+                  : "—"
+            }
+          />
           <Row k="Net pay" v={cad(r.net_pay)} strong />
           <Row k="YTD gross" v={cad(r.ytd_gross)} />
           <Row k="YTD net" v={cad(r.ytd_net)} />

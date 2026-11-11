@@ -1,10 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase/config";
-import { STUB_PROMPT, UPLOAD_SCHEMA, buildReport, toUpload, type UploadRead } from "@/lib/paystub";
+import { STUB_PROMPT, UPLOAD_SCHEMA, buildReport, parseDate, reportWarnings, toUpload, type UploadRead } from "@/lib/paystub";
 
 // Paystub Verifier: a signed-in teammate sends up to 8 files: one pay stub, or several (lenders often want 2–3).
-// Claude reads and groups them; lib/paystub.ts works out the income and compares the stubs. Nothing is saved: the files go to Claude and are dropped.
+// Claude reads and groups them; lib/paystub.ts works out the income and compares the stubs.
+// The summary is saved (as the person who ran it) so TJ can see every check; the files are not kept. Nothing is saved: the files go to Claude and are dropped.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -136,5 +137,23 @@ export async function POST(req: Request) {
   const report = buildReport(read);
   if (!report.stubs.length) return fail(read.problem || read.stubs.find((s) => s.problem)?.problem || "That doesn't look like a pay stub.", 422);
 
-  return Response.json(report);
+  // Save it as the person who ran it. Their own sign-in is used, so the database's sharing rules apply.
+  const latest = report.stubs[0];
+  const { data: saved, error: saveError } = await sb
+    .from("paystub_checks")
+    .insert({
+      employee_name: latest.read.employee_name?.slice(0, 200) ?? null,
+      employer_name: latest.read.employer_name?.slice(0, 200) ?? null,
+      stub_count: Math.min(report.stubs.length, 8),
+      latest_pay_date: [latest.read.pay_date, latest.read.period_end].find((d) => parseDate(d)) ?? null,
+      hourly: latest.hourly,
+      annual40: latest.annual40,
+      warn_count: reportWarnings(report),
+      report,
+    })
+    .select("id")
+    .single();
+  if (saveError) console.error("paystub: couldn't save the check", saveError.message);
+
+  return Response.json({ report, id: saved?.id ?? null });
 }

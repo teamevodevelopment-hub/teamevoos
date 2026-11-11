@@ -654,3 +654,26 @@ export function reportText(r: Report): string {
   ];
   return lines.filter((l) => l !== false && l !== null && l !== undefined).join("\n");
 }
+
+/** How many things to check across the whole upload (each stub, plus the comparison). */
+export function reportWarnings(r: Report): number {
+  const one = (a: Analysis) => a.checks.filter((c) => c.state === "warn").length + a.read.concerns.length;
+  return r.stubs.reduce((t, s) => t + one(s), 0) + (r.cross?.checks.filter((c) => c.state === "warn").length ?? 0);
+}
+
+/** A saved check, as listed in the history (the full report is loaded only when opened). */
+export interface SavedCheck {
+  id: number;
+  created_by: string;
+  created_at: string;
+  deal_id: number | null;
+  employee_name: string | null;
+  employer_name: string | null;
+  stub_count: number;
+  latest_pay_date: string | null;
+  hourly: number | null;
+  annual40: number | null;
+  warn_count: number;
+  report?: Report;
+}
+export const SAVED_COLUMNS = "id,created_by,created_at,deal_id,employee_name,employer_name,stub_count,latest_pay_date,hourly,annual40,warn_count";
