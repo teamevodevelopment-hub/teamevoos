@@ -15,6 +15,8 @@ export interface Line {
 
 /** Exactly what Claude reads off the stub. null means "not shown on the stub". */
 export interface StubRead {
+  /** Which uploaded files (1 = first) make up this stub. */
+  files: number[];
   is_pay_stub: boolean;
   problem: string | null;
   employee_name: string | null;
@@ -63,12 +65,13 @@ export const STUB_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: [
-    "is_pay_stub", "problem", "employee_name", "employee_address", "employer_name", "employer_address", "employer_phone",
+    "files", "is_pay_stub", "problem", "employee_name", "employee_address", "employer_name", "employer_address", "employer_phone",
     "job_title", "employee_id", "pay_date", "period_start", "period_end", "pay_frequency", "pay_type", "hire_date",
     "hourly_rate", "annual_salary", "hours_this_period", "gross_pay", "total_deductions", "net_pay", "ytd_gross",
     "ytd_net", "ytd_hours", "currency", "province", "earnings", "deductions", "notes", "concerns", "confidence",
   ],
   properties: {
+    files: { type: "array", items: { type: "integer" } },
     is_pay_stub: { type: "boolean" },
     problem: str,
     employee_name: str,
@@ -103,9 +106,37 @@ export const STUB_SCHEMA = {
   },
 } as const;
 
-export const STUB_PROMPT = `You read pay stubs for a Canadian car-finance dealership. A sales agent uploaded the pages or photos attached. Lenders will rely on what you read, so copy values exactly as printed.
+/** Everything Claude reads from one upload: one or more stubs, and how they compare. */
+export interface UploadRead {
+  stubs: StubRead[];
+  /** Differences Claude sees between the stubs (layout, fonts, logos, names, numbers). */
+  cross_concerns: string[];
+  problem: string | null;
+}
 
-Rules:
+export const UPLOAD_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["stubs", "cross_concerns", "problem"],
+  properties: {
+    stubs: { type: "array", items: STUB_SCHEMA },
+    cross_concerns: { type: "array", items: { type: "string" } },
+    problem: str,
+  },
+} as const;
+
+export const STUB_PROMPT = `You read pay stubs (English or French) for a Canadian car-finance dealership. A sales agent uploaded the numbered files attached. Lenders will rely on what you read, so copy values exactly as printed.
+
+The files can be one pay stub (maybe over several pages or photos), or several different pay stubs for the same person (lenders often want the last 2 or 3). Work out which files belong together:
+- Give one entry in stubs per pay stub (per pay date), and list its file numbers in files. Pages of the same stub go in one entry. A PDF can hold several stubs; then several entries share that file number.
+- If the same stub was uploaded twice, give it once and mention it in cross_concerns.
+- Order stubs from oldest to newest pay date.
+
+When there are two or more stubs, compare them and put anything inconsistent in cross_concerns, e.g. different employer name, address or logo; different employee name, address or ID; layout, fonts, colours or alignment that change between stubs from the same payroll; deduction lines that appear or disappear; rate or hours that jump without explanation; a stub that looks pasted-together or edited compared with the others. Describe what you see; don't accuse anyone. Empty if they look consistent, or if there's only one stub. Keep each stub's own concerns in that stub's concerns.
+
+If no file is a pay stub, return an empty stubs list and explain in problem.
+
+Rules for each stub:
 - Fill every field from the stub only. If something isn't printed, use null. Never guess a value and never do maths to fill a field (we calculate income ourselves).
 - Dates as YYYY-MM-DD. Money and hours as plain numbers (1234.56), no symbols or commas.
 - hourly_rate: the regular hourly rate if printed. annual_salary: only if a yearly salary is printed.
@@ -115,7 +146,11 @@ Rules:
 - earnings: every earnings line (regular, overtime, vacation, stat holiday, bonus, commission, etc). deductions: every deduction line (income tax, CPP, EI, QPP, union dues, benefits, pension, etc).
 - notes: short plain-English facts an agent should know, e.g. "Overtime is 18% of this cheque", "Includes $400 one-time bonus", "Vacation pay is paid on each cheque".
 - concerns: anything that looks off or worth double-checking, e.g. missing employer address, numbers that don't add up, YTD lower than this period, edited-looking text, mismatched fonts, blurry or cut-off parts, no CPP/EI taken, stub looks like a template. Empty if nothing stands out. Don't accuse anyone of fraud; describe what you see.
-- If the file is not a pay stub (or unreadable), set is_pay_stub false and explain briefly in problem.
+- Stubs can be in English or French (Quebec and other French employers). Read both equally well, and write notes, concerns and problem in English. Keep earnings and deduction labels as printed, and for French labels add the English in brackets, e.g. "Temps supplémentaire (Overtime)", "RRQ (QPP)", "AE (EI)", "RQAP (QPIP)", "Impôt provincial (Provincial tax)".
+- French terms: salaire brut = gross pay, salaire net / net à payer = net pay, retenues / déductions = deductions, cumulatif / cumul annuel / depuis le début de l'année = YTD, taux horaire = hourly rate, heures régulières / normales = regular hours, période de paie = pay period, date de paie / de paiement / de dépôt = pay date, date d'embauche / d'entrée en service / d'ancienneté = hire date, aux deux semaines = biweekly, bimensuel = semi_monthly (twice a month), hebdomadaire = weekly, mensuel = monthly, poste / titre d'emploi = job title, employeur = employer.
+- French amounts use a comma for decimals and spaces between thousands ("1 234,56 $" is 1234.56). Convert them.
+- Dates may be written as words ("15 octobre 2026"), YYYY-MM-DD, or DD/MM/YYYY vs MM/DD/YYYY. Use the pay period length and the order of the dates to tell which; if you still can't be sure, give your best reading and say so in concerns.
+- If a file is not a pay stub (or unreadable), include it as an entry with is_pay_stub false and explain briefly in problem.
 - confidence: how sure you are that the key numbers (gross, net, rate, hours, dates) were read correctly.`;
 
 /* ---------------- Maths ---------------- */
@@ -201,7 +236,7 @@ export function analyse(read: StubRead, today = new Date()): Analysis {
   const payDay = parseDate(read.pay_date) ?? parseDate(read.period_end);
 
   // Regular-pay line, if Claude found one.
-  const regular = read.earnings.find((e) => /\b(regular|reg|base|straight)\b/i.test(e.label) && e.hours && e.amount);
+  const regular = read.earnings.find((e) => /\b(regular|reg|base|straight|r[ée]guli[eè]re?s?|normales?|salaire de base)\b/i.test(e.label) && e.hours && e.amount);
 
   // Hourly: printed rate first, then regular pay ÷ regular hours, then salary, then gross ÷ hours.
   let hourly: number | null = null;
@@ -302,15 +337,15 @@ export function analyse(read: StubRead, today = new Date()): Analysis {
   if (read.ytd_gross != null && read.gross_pay != null && read.ytd_gross + 1 < read.gross_pay)
     checks.push({ state: "warn", text: "Year-to-date gross is lower than this cheque's gross." });
 
-  const hasCpp = read.deductions.some((d) => /\b(cpp|qpp|pension plan)\b/i.test(d.label));
-  const hasEi = read.deductions.some((d) => /\b(ei|employment ins|qpip)\b/i.test(d.label));
-  const hasTax = read.deductions.some((d) => /tax/i.test(d.label));
+  const hasCpp = read.deductions.some((d) => /\b(cpp|qpp|rrq|pension plan|r[ée]gime de rentes)\b/i.test(d.label));
+  const hasEi = read.deductions.some((d) => /\b(ei|ae|employment ins|assurance[- ]emploi|qpip|rqap)\b/i.test(d.label));
+  const hasTax = read.deductions.some((d) => /tax|imp[oô]t/i.test(d.label));
   if (read.deductions.length) {
-    const missing = [!hasTax && "income tax", !hasCpp && "CPP", !hasEi && "EI"].filter(Boolean);
+    const missing = [!hasTax && "income tax", !hasCpp && "CPP/QPP", !hasEi && "EI"].filter(Boolean);
     checks.push(
       missing.length
         ? { state: "warn", text: `No ${missing.join(", ")} taken off. Normal Canadian payroll deducts all three (CPP can stop late in the year once maxed).` }
-        : { state: "ok", text: "Income tax, CPP and EI are all deducted, like normal payroll." },
+        : { state: "ok", text: "Income tax, CPP/QPP and EI are all deducted, like normal payroll." },
     );
   }
 
@@ -359,4 +394,231 @@ export function summaryText(a: Analysis): string {
     ...r.concerns.map((c) => `⚠ ${c}`),
   ];
   return rows.filter(Boolean).join("\n");
+}
+
+/* ---------------- Several stubs ---------------- */
+
+/** One upload's result: each stub on its own (newest first), plus how they compare. */
+export interface Report {
+  stubs: Analysis[];
+  cross: Cross | null;
+}
+
+export interface Cross {
+  count: number;
+  /** Oldest and newest pay dates covered. */
+  from: string | null;
+  to: string | null;
+  avgGross: number | null;
+  avgNet: number | null;
+  avgHoursPerWeek: number | null;
+  /** Average cheque × pays a year. */
+  annualFromAverage: number | null;
+  hourlyMin: number | null;
+  hourlyMax: number | null;
+  checks: Check[];
+}
+
+const plain = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\b(inc|ltd|ltee|limited|corp|corporation|co|llc|lp|the|enr|senc)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/** Same name, allowing for missing middle names, initials, "Inc." and accents. */
+export function sameName(a: string, b: string): boolean {
+  const x = plain(a).split(" ").filter(Boolean);
+  const y = plain(b).split(" ").filter(Boolean);
+  if (!x.length || !y.length) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  return short.every((w) => long.some((v) => v === w || (w.length === 1 && v.startsWith(w)) || (v.length === 1 && w.startsWith(v))));
+}
+
+const avg = (ns: number[]) => (ns.length ? round2(ns.reduce((t, n) => t + n, 0) / ns.length) : null);
+
+export function compare(list: Analysis[]): Cross | null {
+  if (list.length < 2) return null;
+  const money = (n: number) => cad(n);
+  const dated = (a: Analysis) => parseDate(a.read.pay_date) ?? parseDate(a.read.period_end);
+  // Oldest first for the comparisons.
+  const stubs = [...list].sort((a, b) => (dated(a)?.getTime() ?? 0) - (dated(b)?.getTime() ?? 0));
+  const label = (a: Analysis) => {
+    const d = dated(a);
+    return d ? d.toLocaleDateString("en-CA", { month: "short", day: "numeric", timeZone: "UTC" }) : "undated stub";
+  };
+  const checks: Check[] = [];
+
+  // Same person, same employer.
+  for (const [field, what] of [
+    ["employee_name", "Employee name"],
+    ["employer_name", "Employer name"],
+  ] as const) {
+    const names = stubs.map((s) => s.read[field]).filter((n): n is string => !!n);
+    const odd = names.find((n) => !sameName(n, names[0]));
+    if (odd) checks.push({ state: "warn", text: `${what} doesn't match: "${names[0]}" vs "${odd}".` });
+    else if (names.length >= 2) checks.push({ state: "ok", text: `${what} is the same on every stub.` });
+  }
+  const ids = [...new Set(stubs.map((s) => s.read.employee_id?.trim()).filter(Boolean))];
+  if (ids.length > 1) checks.push({ state: "warn", text: `Employee ID changes between stubs (${ids.join(", ")}).` });
+  const hires = [...new Set(stubs.map((s) => s.read.hire_date).filter(Boolean))];
+  if (hires.length > 1) checks.push({ state: "warn", text: `Hire date isn't the same on every stub (${hires.join(", ")}).` });
+
+  // Pay schedule.
+  const freqs = [...new Set(stubs.map((s) => s.frequency).filter((f) => f !== "unknown"))];
+  if (freqs.length > 1) checks.push({ state: "warn", text: `Pay schedule differs between stubs (${freqs.map((f) => FREQ_LABEL[f].toLowerCase()).join(" vs ")}).` });
+  const freq = freqs.length === 1 ? freqs[0] : null;
+  const gapDays = freq ? 365 / PERIODS[freq] : null;
+
+  let datesOk = true;
+  let ytdOk = 0;
+  for (let i = 1; i < stubs.length; i++) {
+    const a = stubs[i - 1];
+    const b = stubs[i];
+    const da = dated(a);
+    const db = dated(b);
+    if (!da || !db) continue;
+    const days = Math.round((db.getTime() - da.getTime()) / DAY);
+    if (days === 0) {
+      datesOk = false;
+      checks.push({ state: "warn", text: `Two stubs have the same pay date (${label(b)}). Make sure it's not the same stub twice.` });
+      continue;
+    }
+    // How many pay periods apart they are.
+    let steps = 1;
+    if (gapDays) {
+      steps = Math.max(1, Math.round(days / gapDays));
+      if (Math.abs(days - steps * gapDays) > 4) {
+        datesOk = false;
+        checks.push({ state: "warn", text: `${label(a)} to ${label(b)} is ${days} days, which doesn't fit a ${FREQ_LABEL[freq!].toLowerCase()} schedule.` });
+      } else if (steps > 1) {
+        datesOk = false;
+        checks.push({ state: "info", text: `${steps - 1} stub${steps - 1 === 1 ? " is" : "s are"} missing between ${label(a)} and ${label(b)}. Lenders usually want consecutive stubs.` });
+      }
+    }
+    // Back-to-back periods should meet with no gap or overlap.
+    const endA = parseDate(a.read.period_end);
+    const startB = parseDate(b.read.period_start);
+    if (steps === 1 && endA && startB) {
+      const gap = Math.round((startB.getTime() - endA.getTime()) / DAY);
+      if (gap !== 1) {
+        datesOk = false;
+        checks.push({
+          state: "warn",
+          text:
+            gap < 1
+              ? `Pay periods overlap: ${label(a)}'s period ends ${a.read.period_end}, but the next starts ${b.read.period_start}.`
+              : `There's a ${gap - 1}-day gap between pay periods (${a.read.period_end} to ${b.read.period_start}).`,
+        });
+      }
+    }
+
+    // YTD should go up by exactly the later cheque's gross (same calendar year).
+    const ya = a.read.ytd_gross;
+    const yb = b.read.ytd_gross;
+    const gb = b.read.gross_pay;
+    if (ya != null && yb != null && gb != null) {
+      if (da.getUTCFullYear() !== db.getUTCFullYear()) {
+        if (yb > ya + 1 && yb > gb * 2 + 1) checks.push({ state: "warn", text: `YTD didn't reset in January: ${label(b)} shows ${money(yb)} YTD.` });
+      } else {
+        const rise = round2(yb - ya);
+        if (steps === 1) {
+          if (Math.abs(rise - gb) <= 1) ytdOk++;
+          else checks.push({ state: "warn", text: `YTD gross went up ${money(rise)} from ${label(a)} to ${label(b)}, but the ${label(b)} cheque's gross is ${money(gb)}. These should match.` });
+        } else if (rise + 1 < gb) {
+          checks.push({ state: "warn", text: `YTD gross went up only ${money(rise)} from ${label(a)} to ${label(b)}, less than the ${label(b)} cheque alone (${money(gb)}).` });
+        } else {
+          // Several cheques in between: the rise should be roughly that many typical cheques.
+          const typical = Math.max(gb, a.read.gross_pay ?? 0);
+          if (rise > steps * typical * 1.5 + 1)
+            checks.push({
+              state: "warn",
+              text: `YTD gross jumped ${money(rise)} from ${label(a)} to ${label(b)}, far more than ${steps} cheques of about ${money(typical)}. Ask what the extra pay was.`,
+            });
+          else ytdOk++;
+        }
+      }
+    }
+  }
+  if (datesOk && gapDays) checks.push({ state: "ok", text: `Pay dates and pay periods follow on one after another (${FREQ_LABEL[freq!].toLowerCase()}).` });
+  if (ytdOk && ytdOk === stubs.length - 1) checks.push({ state: "ok", text: "Year-to-date totals go up by exactly each cheque's gross pay." });
+
+  // Rate and hours.
+  const rates = stubs.map((s) => s.hourly).filter((n): n is number => n != null);
+  for (let i = 1; i < stubs.length; i++) {
+    const ra = stubs[i - 1].hourly;
+    const rb = stubs[i].hourly;
+    if (ra != null && rb != null && Math.abs(ra - rb) >= 0.01) {
+      const pct = ((rb - ra) / ra) * 100;
+      checks.push({
+        state: rb < ra || pct > 15 ? "warn" : "info",
+        text: `Hourly rate changes from ${money(ra)} to ${money(rb)} on ${label(stubs[i])} (${pct > 0 ? "+" : ""}${pct.toFixed(1)}%).${rb < ra ? " A pay cut is unusual; ask about it." : pct > 15 ? " A big jump; ask about it." : " Likely a raise."}`,
+      });
+    }
+  }
+  const hours = stubs.map((s) => s.hoursPerWeek).filter((n): n is number => n != null);
+  if (hours.length >= 2) {
+    const lo = Math.min(...hours);
+    const hi = Math.max(...hours);
+    if (hi > 0 && (hi - lo) / hi > 0.25) checks.push({ state: "info", text: `Hours vary from about ${lo} to ${hi} a week. Use the average, not the best week.` });
+  }
+  const grosses = stubs.map((s) => s.read.gross_pay).filter((n): n is number => n != null);
+  const hourlyJob = stubs.some((s) => s.read.pay_type === "hourly" || s.read.pay_type === "mixed");
+  if (hourlyJob && grosses.length >= 2 && grosses.every((g) => g === grosses[0]) && stubs.some((s) => s.read.earnings.some((e) => /overtime|supp/i.test(e.label))))
+    checks.push({ state: "info", text: "Every stub shows exactly the same gross, even with overtime. Unusual for an hourly job; worth a closer look." });
+
+  // Deduction lines that come and go.
+  const lines = (s: Analysis) => new Set(s.read.deductions.map((d) => plain(d.label)));
+  const all = stubs.map(lines);
+  const union = new Set(all.flatMap((x) => [...x]));
+  const patchy = [...union].filter((l) => all.some((x) => !x.has(l)));
+  if (patchy.length && stubs.every((s) => s.read.deductions.length))
+    checks.push({ state: "info", text: `Some deduction lines aren't on every stub (${patchy.slice(0, 3).join(", ")}). Often normal (e.g. CPP maxed out), but check.` });
+
+  const ds = stubs.map(dated).filter((d): d is Date => !!d);
+  const nets = stubs.map((s) => s.read.net_pay).filter((n): n is number => n != null);
+  const avgGross = avg(grosses);
+  return {
+    count: stubs.length,
+    from: ds.length ? ds[0].toISOString().slice(0, 10) : null,
+    to: ds.length ? ds[ds.length - 1].toISOString().slice(0, 10) : null,
+    avgGross,
+    avgNet: avg(nets),
+    avgHoursPerWeek: avg(hours),
+    annualFromAverage: avgGross != null && freq ? round2(avgGross * PERIODS[freq]) : null,
+    hourlyMin: rates.length ? Math.min(...rates) : null,
+    hourlyMax: rates.length ? Math.max(...rates) : null,
+    checks,
+  };
+}
+
+/** Turns what Claude read into the full report: each stub worked out, newest first, then compared. */
+export function buildReport(read: UploadRead, today = new Date()): Report {
+  const stubs = read.stubs
+    .filter((s) => s.is_pay_stub)
+    .map((s) => analyse(s, today))
+    .sort((a, b) => ((parseDate(b.read.pay_date) ?? parseDate(b.read.period_end))?.getTime() ?? 0) - ((parseDate(a.read.pay_date) ?? parseDate(a.read.period_end))?.getTime() ?? 0));
+  const cross = compare(stubs);
+  if (cross) for (const c of read.cross_concerns) cross.checks.push({ state: "warn", text: c });
+  return { stubs, cross };
+}
+
+/** Plain-text summary of a whole upload, for the deal chat. */
+export function reportText(r: Report): string {
+  if (!r.cross) return summaryText(r.stubs[0]);
+  const latest = r.stubs[0];
+  const c = r.cross;
+  const lines = [
+    summaryText(latest).replace(/^Paystub check/, `Paystub check (${c.count} stubs, latest shown)`),
+    "",
+    `Across ${c.count} stubs (${c.from ?? "?"} to ${c.to ?? "?"}):`,
+    c.avgGross != null && `Average cheque: gross ${cad(c.avgGross)}, net ${cad(c.avgNet)}`,
+    c.annualFromAverage != null && `Yearly from average cheque: ${cad(c.annualFromAverage, false)}`,
+    c.avgHoursPerWeek != null && `Average hours: ${c.avgHoursPerWeek} a week`,
+    ...r.stubs.slice(1).flatMap((s) => [...s.checks.filter((x) => x.state === "warn"), ...s.read.concerns.map((t) => ({ text: t }))].map((x) => `⚠ (${s.read.pay_date ?? "older stub"}) ${x.text}`)),
+    ...c.checks.filter((x) => x.state === "warn").map((x) => `⚠ ${x.text}`),
+  ];
+  return lines.filter((l) => l !== false && l !== null && l !== undefined).join("\n");
 }

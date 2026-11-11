@@ -791,3 +791,9 @@ html,body{height:var(--app-h,100%)}
   .stub-lines th,.stub-lines td{padding:7px 4px;font-size:12.5px}
   .stub-lines th{font-size:10.5px}
 }
+.stub-span{font-size:12.5px!important;color:var(--fg-3)!important;margin-top:2px!important}
+.stub-pickone{gap:10px}
+.stub-seg{display:flex;flex-wrap:wrap;align-self:flex-start;max-width:100%}
+.stub-seg button{padding:7px 12px;font-size:13.5px;min-height:36px}
+.stub-seg .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);display:inline-block}
+.stub-compare td:first-child{font-weight:600;white-space:nowrap}
