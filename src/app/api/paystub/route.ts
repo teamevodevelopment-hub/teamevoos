@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase/config";
-import { STUB_PROMPT, UPLOAD_SCHEMA, buildReport, type UploadRead } from "@/lib/paystub";
+import { STUB_PROMPT, UPLOAD_SCHEMA, buildReport, toUpload, type UploadRead } from "@/lib/paystub";
 
 // Paystub Verifier: a signed-in teammate sends up to 8 files: one pay stub, or several (lenders often want 2–3).
 // Claude reads and groups them; lib/paystub.ts works out the income and compares the stubs. Nothing is saved: the files go to Claude and are dropped.
@@ -105,9 +105,20 @@ export async function POST(req: Request) {
       })
       .finalMessage();
   } catch (e) {
+    // The real reason goes to the Vercel logs (Deployments → Logs), never to the screen.
+    console.error("paystub: Claude request failed", e instanceof Anthropic.APIError ? `${e.status} ${e.message}` : e);
     if (e instanceof Anthropic.RateLimitError) return fail("Too many checks at once. Wait a minute and try again.", 429);
     if (e instanceof Anthropic.AuthenticationError) return fail("The Claude API key is wrong or expired. Update ANTHROPIC_API_KEY in Vercel.", 503);
-    if (e instanceof Anthropic.BadRequestError) return fail("Claude couldn't open that file. Try a clearer photo or a different PDF.", 400);
+    if (e instanceof Anthropic.BadRequestError) {
+      // Only blame the file when Claude says it's the file.
+      const fileProblem = /pdf|image|document|media|base64|page/i.test(e.message);
+      return fail(
+        fileProblem
+          ? "Claude couldn't open that file. Try a clearer photo or a different PDF."
+          : "The verifier hit a setup problem on our side, not your file. Tell TJ; the details are in the Vercel logs.",
+        fileProblem ? 400 : 500,
+      );
+    }
     if (e instanceof Anthropic.APIError) return fail("Claude is busy right now. Try again in a minute.", 502);
     return fail("Couldn't reach Claude. Try again.", 502);
   }
@@ -117,8 +128,9 @@ export async function POST(req: Request) {
   const text = msg.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
   let read: UploadRead;
   try {
-    read = JSON.parse(text) as UploadRead;
-  } catch {
+    read = toUpload(JSON.parse(text));
+  } catch (e) {
+    console.error("paystub: answer wasn't JSON", e, text.slice(0, 500));
     return fail("Claude's answer came back garbled. Try again.", 502);
   }
   const report = buildReport(read);

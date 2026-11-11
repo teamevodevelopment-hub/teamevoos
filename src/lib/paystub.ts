@@ -50,61 +50,41 @@ export interface StubRead {
   confidence: "high" | "medium" | "low";
 }
 
-const num = { anyOf: [{ type: "number" }, { type: "null" }] };
-const str = { anyOf: [{ type: "string" }, { type: "null" }] };
-const date = { anyOf: [{ type: "string", description: "YYYY-MM-DD" }, { type: "null" }] };
+// Claude's answer format allows at most 16 "value or blank" (union) fields, so nothing here is nullable:
+// every value Claude can't find comes back as an empty string "", and toUpload() below turns those into null.
+// Numbers come back as text too ("2847.00"), which also lets us tidy up "$2,847.00" or "2 847,00".
+const text = { type: "string" };
 const line = {
   type: "object",
   additionalProperties: false,
   required: ["label", "hours", "rate", "amount", "ytd"],
-  properties: { label: { type: "string" }, hours: num, rate: num, amount: num, ytd: num },
+  properties: { label: text, hours: text, rate: text, amount: text, ytd: text },
 };
 
-/** JSON schema Claude's answer must match. */
+const TEXT_FIELDS = ["problem", "employee_name", "employee_address", "employer_name", "employer_address", "employer_phone", "job_title", "employee_id", "currency", "province"] as const;
+const DATE_FIELDS = ["pay_date", "period_start", "period_end", "hire_date"] as const;
+const NUMBER_FIELDS = ["hourly_rate", "annual_salary", "hours_this_period", "gross_pay", "total_deductions", "net_pay", "ytd_gross", "ytd_net", "ytd_hours"] as const;
+
+/** JSON schema for one stub in Claude's answer. */
 export const STUB_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "files", "is_pay_stub", "problem", "employee_name", "employee_address", "employer_name", "employer_address", "employer_phone",
-    "job_title", "employee_id", "pay_date", "period_start", "period_end", "pay_frequency", "pay_type", "hire_date",
-    "hourly_rate", "annual_salary", "hours_this_period", "gross_pay", "total_deductions", "net_pay", "ytd_gross",
-    "ytd_net", "ytd_hours", "currency", "province", "earnings", "deductions", "notes", "concerns", "confidence",
-  ],
+  required: ["files", "is_pay_stub", ...TEXT_FIELDS, ...DATE_FIELDS, ...NUMBER_FIELDS, "pay_frequency", "pay_type", "earnings", "deductions", "notes", "concerns", "confidence"],
   properties: {
     files: { type: "array", items: { type: "integer" } },
     is_pay_stub: { type: "boolean" },
-    problem: str,
-    employee_name: str,
-    employee_address: str,
-    employer_name: str,
-    employer_address: str,
-    employer_phone: str,
-    job_title: str,
-    employee_id: str,
-    pay_date: date,
-    period_start: date,
-    period_end: date,
+    ...Object.fromEntries(TEXT_FIELDS.map((k) => [k, text])),
+    ...Object.fromEntries(DATE_FIELDS.map((k) => [k, text])),
+    ...Object.fromEntries(NUMBER_FIELDS.map((k) => [k, text])),
     pay_frequency: { type: "string", enum: ["weekly", "biweekly", "semi_monthly", "monthly", "unknown"] },
     pay_type: { type: "string", enum: ["hourly", "salary", "commission", "mixed", "unknown"] },
-    hire_date: date,
-    hourly_rate: num,
-    annual_salary: num,
-    hours_this_period: num,
-    gross_pay: num,
-    total_deductions: num,
-    net_pay: num,
-    ytd_gross: num,
-    ytd_net: num,
-    ytd_hours: num,
-    currency: str,
-    province: str,
     earnings: { type: "array", items: line },
     deductions: { type: "array", items: line },
-    notes: { type: "array", items: { type: "string" } },
-    concerns: { type: "array", items: { type: "string" } },
+    notes: { type: "array", items: text },
+    concerns: { type: "array", items: text },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
   },
-} as const;
+};
 
 /** Everything Claude reads from one upload: one or more stubs, and how they compare. */
 export interface UploadRead {
@@ -120,10 +100,60 @@ export const UPLOAD_SCHEMA = {
   required: ["stubs", "cross_concerns", "problem"],
   properties: {
     stubs: { type: "array", items: STUB_SCHEMA },
-    cross_concerns: { type: "array", items: { type: "string" } },
-    problem: str,
+    cross_concerns: { type: "array", items: text },
+    problem: text,
   },
-} as const;
+};
+
+/** "$2,847.00", "2 847,00 $", "35.5875" → number. Blank or unreadable → null. */
+export function toNumber(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v !== "string") return null;
+  let t = v.replace(/[$\s\u00a0\u202f]/g, "").replace(/^\((.*)\)$/, "-$1");
+  if (!t) return null;
+  // French style "2847,00" or "1.234,56": the last comma is the decimal point.
+  if (/,\d{1,4}$/.test(t) && !/\.\d+$/.test(t)) t = t.replace(/\./g, "").replace(",", ".");
+  else t = t.replace(/,/g, "");
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+const toText = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+const toDate = (v: unknown) => {
+  const t = toText(v);
+  return t && /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
+};
+const list = (v: unknown) => (Array.isArray(v) ? v : []);
+const texts = (v: unknown) => list(v).map(toText).filter((t): t is string => !!t);
+const toLine = (v: unknown): Line => {
+  const o = (v ?? {}) as Record<string, unknown>;
+  return { label: toText(o.label) ?? "Item", hours: toNumber(o.hours), rate: toNumber(o.rate), amount: toNumber(o.amount), ytd: toNumber(o.ytd) };
+};
+const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(v as T) ? (v as T) : fallback);
+
+/** Claude's raw answer (all text) → typed stubs with real numbers, dates and nulls. */
+export function toUpload(raw: unknown): UploadRead {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const stubs = list(o.stubs).map((x): StubRead => {
+    const r = (x ?? {}) as Record<string, unknown>;
+    const out: Record<string, unknown> = {
+      files: list(r.files).filter((n): n is number => typeof n === "number"),
+      is_pay_stub: r.is_pay_stub !== false,
+      pay_frequency: oneOf(r.pay_frequency, ["weekly", "biweekly", "semi_monthly", "monthly", "unknown"] as const, "unknown"),
+      pay_type: oneOf(r.pay_type, ["hourly", "salary", "commission", "mixed", "unknown"] as const, "unknown"),
+      earnings: list(r.earnings).map(toLine),
+      deductions: list(r.deductions).map(toLine),
+      notes: texts(r.notes),
+      concerns: texts(r.concerns),
+      confidence: oneOf(r.confidence, ["high", "medium", "low"] as const, "medium"),
+    };
+    for (const k of TEXT_FIELDS) out[k] = toText(r[k]);
+    for (const k of DATE_FIELDS) out[k] = toDate(r[k]);
+    for (const k of NUMBER_FIELDS) out[k] = toNumber(r[k]);
+    return out as unknown as StubRead;
+  });
+  return { stubs, cross_concerns: texts(o.cross_concerns), problem: toText(o.problem) };
+}
 
 export const STUB_PROMPT = `You read pay stubs (English or French) for a Canadian car-finance dealership. A sales agent uploaded the numbered files attached. Lenders will rely on what you read, so copy values exactly as printed.
 
@@ -134,15 +164,16 @@ The files can be one pay stub (maybe over several pages or photos), or several d
 
 When there are two or more stubs, compare them and put anything inconsistent in cross_concerns, e.g. different employer name, address or logo; different employee name, address or ID; layout, fonts, colours or alignment that change between stubs from the same payroll; deduction lines that appear or disappear; rate or hours that jump without explanation; a stub that looks pasted-together or edited compared with the others. Describe what you see; don't accuse anyone. Empty if they look consistent, or if there's only one stub. Keep each stub's own concerns in that stub's concerns.
 
-If no file is a pay stub, return an empty stubs list and explain in problem.
+If no file is a pay stub, return an empty stubs list and explain in problem; otherwise problem is "". Use "" for any text field you have nothing for.
 
 Rules for each stub:
-- Fill every field from the stub only. If something isn't printed, use null. Never guess a value and never do maths to fill a field (we calculate income ourselves).
-- Dates as YYYY-MM-DD. Money and hours as plain numbers (1234.56), no symbols or commas.
+- Fill every field from the stub only. If something isn't printed, use an empty string "". Never guess a value and never do maths to fill a field (we calculate income ourselves).
+- Dates as YYYY-MM-DD. Money, rates and hours as plain numbers written as text ("2847.00", "35.5875", "80"), with no $ sign, spaces or thousands separators. Use "" when a line has no value in that column.
 - hourly_rate: the regular hourly rate if printed. annual_salary: only if a yearly salary is printed.
 - hours_this_period: regular plus overtime hours worked this period, if printed.
 - hire_date: only if the stub prints a hire, start, seniority or service date.
 - pay_frequency: from a printed label, or from the pay period dates (7 days = weekly, 14 = biweekly, about 15 = semi_monthly, a month = monthly). Otherwise unknown.
+- Taxable benefits (e.g. LIFE-TB, group life) are not cash: don't list them as earnings or deductions, and don't count them in gross; mention them in notes.
 - earnings: every earnings line (regular, overtime, vacation, stat holiday, bonus, commission, etc). deductions: every deduction line (income tax, CPP, EI, QPP, union dues, benefits, pension, etc).
 - notes: short plain-English facts an agent should know, e.g. "Overtime is 18% of this cheque", "Includes $400 one-time bonus", "Vacation pay is paid on each cheque".
 - concerns: anything that looks off or worth double-checking, e.g. missing employer address, numbers that don't add up, YTD lower than this period, edited-looking text, mismatched fonts, blurry or cut-off parts, no CPP/EI taken, stub looks like a template. Empty if nothing stands out. Don't accuse anyone of fraud; describe what you see.
@@ -150,7 +181,7 @@ Rules for each stub:
 - French terms: salaire brut = gross pay, salaire net / net à payer = net pay, retenues / déductions = deductions, cumulatif / cumul annuel / depuis le début de l'année = YTD, taux horaire = hourly rate, heures régulières / normales = regular hours, période de paie = pay period, date de paie / de paiement / de dépôt = pay date, date d'embauche / d'entrée en service / d'ancienneté = hire date, aux deux semaines = biweekly, bimensuel = semi_monthly (twice a month), hebdomadaire = weekly, mensuel = monthly, poste / titre d'emploi = job title, employeur = employer.
 - French amounts use a comma for decimals and spaces between thousands ("1 234,56 $" is 1234.56). Convert them.
 - Dates may be written as words ("15 octobre 2026"), YYYY-MM-DD, or DD/MM/YYYY vs MM/DD/YYYY. Use the pay period length and the order of the dates to tell which; if you still can't be sure, give your best reading and say so in concerns.
-- If a file is not a pay stub (or unreadable), include it as an entry with is_pay_stub false and explain briefly in problem.
+- If a file is not a pay stub (or unreadable), include it as an entry with is_pay_stub false and explain briefly in problem. problem is "" for a normal pay stub.
 - confidence: how sure you are that the key numbers (gross, net, rate, hours, dates) were read correctly.`;
 
 /* ---------------- Maths ---------------- */
@@ -260,7 +291,8 @@ export function analyse(read: StubRead, today = new Date()): Analysis {
     hourly = read.gross_pay / (weeksPerPeriod * FULL_TIME_HOURS);
     hourlyHow = `Gross pay ÷ ${weeksPerPeriod * FULL_TIME_HOURS} hours (assumes 40 h a week; no hours on the stub)`;
   }
-  hourly = hourly ? round2(hourly) : null;
+  // Keep the rate as exact as printed (e.g. 35.5875) so the yearly figure is exact; it shows rounded to cents.
+  hourly = hourly ? Math.round(hourly * 10000) / 10000 : null;
 
   const annual40 = hourly ? round2(hourly * FULL_TIME_HOURS * WEEKS) : null;
   const annualFromStub = read.gross_pay && periodsPerYear ? round2(read.gross_pay * periodsPerYear) : null;
