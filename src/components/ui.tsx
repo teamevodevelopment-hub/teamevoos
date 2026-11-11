@@ -124,6 +124,20 @@ export const I: Record<string, ReactNode> = {
       <path d="M3.6 11.2c2.6-.9 5.4-1.3 8.4-1.3s5.8.4 8.4 1.3M9.9 13.6L7.4 19.2M14.1 13.6l2.5 5.6" />
     </svg>
   ),
+  /** Pay stub with a check mark: the Paystub Verifier. */
+  stub: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5M8.5 12h4M8.5 16h3" />
+      <path d="M13.5 16.5l1.6 1.6 3-3.2" strokeWidth={2} />
+    </svg>
+  ),
+  copy: (
+    <svg viewBox="0 0 24 24" {...s}>
+      <rect x="8" y="8" width="12" height="12" rx="2" />
+      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
+    </svg>
+  ),
   check: (
     <svg viewBox="0 0 24 24" {...s} strokeWidth={2.2}>
       <path d="M5 12.5l4.5 4.5L19 7.5" />

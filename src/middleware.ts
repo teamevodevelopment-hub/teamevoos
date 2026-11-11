@@ -49,5 +49,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // The push sender (called by the database) and the background worker load without a sign-in.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|icons/|brand/|sw\\.js|api/push).*)"],
+  // The paystub reader checks the sign-in itself, so it can answer with a clear message instead of a redirect.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|icons/|brand/|sw\\.js|api/push|api/paystub).*)"],
 };

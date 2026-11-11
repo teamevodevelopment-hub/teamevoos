@@ -23,7 +23,7 @@ export function useIsMobile() {
   return m;
 }
 
-const TITLES: Record<string, string> = { "/deals": "Deals", "/team": "Team room", "/chats": "Chats", "/inbox": "Inbox", "/new": "New deal", "/settings": "Settings" };
+const TITLES: Record<string, string> = { "/deals": "Deals", "/team": "Team room", "/chats": "Chats", "/inbox": "Inbox", "/new": "New deal", "/paystub": "Paystub verifier", "/settings": "Settings" };
 // Non-admins reach /settings only for their account (sign out), so it gets a plainer name.
 const titleFor = (path: string, admin: boolean) => (path === "/settings" && !admin ? "Account" : (TITLES[path] ?? "Deal Portal"));
 
@@ -39,6 +39,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { href: "/chats", label: "Chats", icon: I.team, count: chatsUnread, match: ["/chats", "/team"] },
     { href: "/inbox", label: "Inbox", icon: I.inbox, count: unread },
     { href: "/new", label: "New deal", icon: I.plus },
+    { href: "/paystub", label: "Paystub verifier", short: "Paystub", icon: I.stub },
     ...(me.role === "admin" ? [{ href: "/settings", label: "Settings", icon: I.gear }] : []),
   ];
 
@@ -93,6 +94,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
         ? `${unread} unread`
         : pathname === "/new"
           ? "Takes about a minute"
+          : pathname === "/paystub"
+            ? "Upload a pay stub to see income and time at the job"
           : me.role === "admin"
             ? "Team settings and your account"
             : "Your account";
@@ -178,8 +181,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
             ) : (
               <Link key={n.href} href={n.href} className="tab" aria-current={here(n) ? "page" : undefined}>
                 {n.icon}
-                {n.label}
-                {n.count ? <span className="count">{n.count}</span> : null}
+                {"short" in n && n.short ? n.short : n.label}
+                {"count" in n && n.count ? <span className="count">{n.count}</span> : null}
               </Link>
             ),
           )}
