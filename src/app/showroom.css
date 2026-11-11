@@ -332,14 +332,29 @@
 .showroom-auth .authcard{align-self:center;justify-self:center;margin:32px 24px;box-shadow:var(--elev-2);border-radius:var(--r-xl)}
 .showroom-auth .authcard .btn{min-height:46px;font-size:15px}
 @media (max-width:860px){
-  .showroom-auth{grid-template-columns:minmax(0,1fr);align-content:start;overflow:auto}
-  .auth-hero{padding:28px 22px 34px;gap:10px;border-radius:0 0 var(--r-xl) var(--r-xl)}
-  .auth-hero-logo{width:150px;margin-bottom:4px}
-  .auth-hero h2{font-size:28px}
-  .auth-hero p{font-size:14.5px}
-  .auth-hero ul{display:none}
-  .auth-hero .carart{width:220px;bottom:-6px;right:-40px}
-  .showroom-auth .authcard{width:auto;margin:-18px 16px 24px;position:relative}
+  /* The blue runs up behind the iPhone clock and battery, with no black strip. */
+  .showroom-auth{display:flex;flex-direction:column;flex:1;min-height:0;height:auto;margin-top:calc(-1 * env(safe-area-inset-top,0px));overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .auth-hero{flex:1 0 auto;justify-content:flex-end;gap:10px;padding:calc(24px + env(safe-area-inset-top,0px)) 22px 56px;border-radius:0 0 28px 28px}
+  .auth-hero-logo{width:150px;margin-bottom:0}
+  .auth-hero>*{order:2}
+  .auth-hero-logo{order:0}
+  .auth-hero h2{font-size:30px;max-width:12ch}
+  .auth-hero p{font-size:15px;max-width:30ch}
+  .auth-hero ul{display:flex;gap:8px;margin-top:10px}
+  .auth-hero li{font-size:14px}
+  .auth-hero li svg{width:28px;height:28px}
+  /* Car sits in the bottom corner, behind nothing important. */
+  /* On tall phones a big car fills the space between the logo and the words. */
+  .auth-hero .carart{order:1;position:static;z-index:0;width:min(300px,78%);margin:auto auto 22px;opacity:1}
+  .auth-hero .carart .ca-body,.auth-hero .carart .ca-win{stroke:rgba(255,255,255,.32)}
+  .auth-hero .carart .ca-wheel,.auth-hero .carart .ca-road{stroke:rgba(255,255,255,.22)}
+  @media (max-height:780px){.auth-hero .carart{display:none}.auth-hero-logo{margin-bottom:22px}}
+  /* Full-width card that overlaps the banner a little */
+  .showroom-auth .authcard{align-self:stretch;justify-self:stretch;width:auto;max-width:none;margin:-32px 16px 0;padding:22px 20px;border-radius:22px;position:relative;z-index:1}
+  .showroom-auth .authcard h1{font-size:24px}
+  .showroom-auth .input{font-size:16px;min-height:50px}
+  .showroom-auth .authcard .btn{min-height:52px;font-size:16px}
+  .showroom-auth::after{content:"Car financing · Car dealer";display:block;margin:0;padding:24px 16px calc(20px + env(safe-area-inset-bottom,0px));text-align:center;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-3)}
 }
 
 
