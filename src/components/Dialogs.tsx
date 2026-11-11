@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { usePortal } from "./PortalProvider";
+import { isOpen, usePortal } from "./PortalProvider";
 import { Avatar, Chip, I } from "./ui";
 import { supabase, errText } from "@/lib/supabase/client";
-import { fullName } from "@/lib/stages";
+import { fullName, yourMove } from "@/lib/stages";
 import { useFocusTrap } from "@/lib/useFocusTrap";
 import type { Deal } from "@/lib/types";
 
@@ -165,7 +165,7 @@ function IdeaDialog() {
 }
 
 function Palette() {
-  const { deals, person, setDialog, openDeal } = usePortal();
+  const { deals, person, setDialog, openDeal, me, setLayout } = usePortal();
   const router = useRouter();
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
@@ -175,26 +175,38 @@ function Palette() {
   const results = useMemo(() => {
     const t = q.trim().toLowerCase();
     const digits = t.replace(/\D/g, "");
+    // Nothing typed: the open deals waiting on you, oldest first.
+    if (!t)
+      return deals
+        .filter((d) => isOpen(d) && yourMove(d.stage, me.role))
+        .sort((a, b) => a.stage_changed_at.localeCompare(b.stage_changed_at))
+        .slice(0, 6);
     return deals
       .filter(
         (d) =>
-          !t ||
           fullName(d).toLowerCase().includes(t) ||
           (digits.length >= 3 && (d.phone ?? "").replace(/\D/g, "").includes(digits)) ||
           (d.dealertrack_no ?? "").toLowerCase().includes(t),
       )
       .slice(0, 8);
-  }, [deals, q]);
+  }, [deals, q, me.role]);
   const actions = [
-    { label: "New deal", href: "/new" },
-    { label: "Go to Inbox", href: "/inbox" },
-  ].filter((a) => !q || a.label.toLowerCase().includes(q.toLowerCase()));
+    { label: "New deal", icon: I.plus, go: () => router.push("/new") },
+    { label: "Check a pay stub", icon: I.stub, go: () => router.push("/paystub") },
+    { label: "Go to Deals", icon: I.board, go: () => router.push("/deals") },
+    { label: "Go to Chats", icon: I.team, go: () => router.push("/chats") },
+    { label: "Go to Team room", icon: I.chat, go: () => router.push("/team") },
+    { label: "Go to Inbox", icon: I.inbox, go: () => router.push("/inbox") },
+    { label: "Show deals as a board", icon: I.board, go: () => (setLayout("board"), router.push("/deals")) },
+    { label: "Show deals as a table", icon: I.board, go: () => (setLayout("table"), router.push("/deals")) },
+    ...(me.role === "admin" ? [{ label: "Go to Settings", icon: I.gear, go: () => router.push("/settings") }] : []),
+  ].filter((a) => !q || a.label.toLowerCase().includes(q.trim().toLowerCase()));
   const total = results.length + actions.length;
 
   const pick = (i: number) => {
     setDialog(null);
     if (i < results.length) openDeal(results[i].id);
-    else router.push(actions[i - results.length].href);
+    else actions[i - results.length].go();
   };
 
   return (
@@ -230,7 +242,7 @@ function Palette() {
         </kbd>
       </div>
       <div className="res">
-        {results.length > 0 && <div className="grp">Customers</div>}
+        {results.length > 0 && <div className="grp">{q.trim() ? "Customers" : "Waiting on you"}</div>}
         {results.map((d, i) => (
           <button key={d.id} className={`it${sel === i ? " sel" : ""}`} onClick={() => pick(i)}>
             <Avatar p={person(d.agent_id)} size="sm" />
@@ -241,11 +253,13 @@ function Palette() {
         ))}
         {actions.length > 0 && <div className="grp">Actions</div>}
         {actions.map((a, j) => (
-          <button key={a.href} className={`it${sel === results.length + j ? " sel" : ""}`} onClick={() => pick(results.length + j)}>
+          <button key={a.label} className={`it act${sel === results.length + j ? " sel" : ""}`} onClick={() => pick(results.length + j)}>
+            <span className="act-ic">{a.icon}</span>
             {a.label}
+            {sel === results.length + j && <kbd className="enter">↵</kbd>}
           </button>
         ))}
-        {!total && <div className="emptystate" style={{ padding: 24 }}>No customer matches “{q}”.</div>}
+        {!total && <div className="emptystate" style={{ padding: 24 }}>Nothing matches “{q}”.</div>}
       </div>
     </div>
   );

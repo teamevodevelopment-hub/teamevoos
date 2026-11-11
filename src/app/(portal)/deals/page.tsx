@@ -242,6 +242,7 @@ export default function DealsPage() {
         return (
           <section
             key={s.id}
+            data-col={s.id}
             className={`col${s.id === "declined" || s.id === "lost" ? " muted" : ""}${cls}`}
             style={{ ["--c" as string]: `var(${s.color})` }}
             onDragOver={(e) => {

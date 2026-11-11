@@ -43,6 +43,38 @@ export function Shell({ children }: { children: React.ReactNode }) {
     ...(me.role === "admin" ? [{ href: "/settings", label: "Settings", icon: I.gear }] : []),
   ];
 
+  // Computers: the sidebar can shrink to icons for more board space. Remembered per device.
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem("sideCollapsed") === "1");
+    } catch {}
+  }, []);
+  const toggleSide = () =>
+    setCollapsed((c) => {
+      try {
+        localStorage.setItem("sideCollapsed", c ? "0" : "1");
+      } catch {}
+      return !c;
+    });
+
+  // ⌘\ (Ctrl+\ on Windows) collapses or expands the sidebar.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        setCollapsed((c) => {
+          try {
+            localStorage.setItem("sideCollapsed", c ? "0" : "1");
+          } catch {}
+          return !c;
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Pull down on a list (phone) to refresh it.
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -135,18 +167,23 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <div className="app">
+      <div className={`app${collapsed ? " collapsed" : ""}`}>
         <aside className="side">
           <div className="brand">
             {/* The sidebar is always dark, so it uses the white version of the logo. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/logo-dark.png" alt="easyAuto" width={164} height={52} />
+            <img className="brand-full" src="/brand/logo-dark.png" alt="easyAuto" width={164} height={52} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="brand-mark" src="/icons/icon-96.png" alt="easyAuto" width={36} height={36} />
             <span className="brand-sub">Deal portal</span>
           </div>
+          <button className="side-toggle" onClick={toggleSide} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+            {I.back}
+          </button>
           {nav.map((n) => (
-            <Link key={n.href} href={n.href} className="nav" aria-current={here(n) ? "page" : undefined}>
+            <Link key={n.href} href={n.href} className="nav" aria-current={here(n) ? "page" : undefined} title={collapsed ? n.label : undefined}>
               {n.icon}
-              {n.label}
+              <span className="nav-l">{n.label}</span>
               {n.count ? (
                 <span className="count" key={n.count}>
                   {n.count}
@@ -155,7 +192,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
           <div className="grow" />
-          <button className="suggest" onClick={() => setDialog({ kind: "idea" })}>
+          <button className="suggest" onClick={() => setDialog({ kind: "idea" })} title={collapsed ? "Suggest a feature" : undefined}>
             {I.bulb}
             <span>Suggest a feature</span>
           </button>

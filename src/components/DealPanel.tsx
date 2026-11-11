@@ -525,7 +525,7 @@ function LenderRow({ l, editable }: { l: LenderSubmission; editable: boolean }) 
   }
 
   return (
-    <div className="lrow">
+    <div className={`lrow ${l.status}`}>
       <span className="nm">
         {l.lender}{" "}
         <span style={{ color: "var(--fg-3)", fontWeight: 400, fontSize: 12.5 }}>
